@@ -4,7 +4,7 @@ An Android budgeting app being built step by step while learning Android develop
 
 ## Current checkpoint
 
-The Kotlin / Jetpack Compose starter app runs on the owner's OnePlus 8T (Android 14) and displays "Yo Yo Yo Zain!". Budgeting features and persistent storage are not implemented yet.
+Milestone 2 adds five navigable Compose screens, a shared month selector, a sample spending overview, and an expense preview sheet. All displayed financial amounts are sample data; persistent storage and editing are not implemented yet. The original greeting remains as a learning preview. See [the milestone 2 walkthrough](docs/milestone-02.md).
 
 - Current application ID: `com.example.mybudgetapp` (starter identifier; review before release).
 - Minimum Android version: Android 8.0 / API 26.

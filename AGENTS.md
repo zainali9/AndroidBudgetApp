@@ -1,6 +1,6 @@
 # Working together
 
-The owner is new to Android development. During each implementation milestone:
+The owner knows Git and is new to Android development. Focus teaching on Android and Kotlin; do not explain basic Git operations unless asked. During each implementation milestone:
 - Explain the relevant Android and Kotlin concepts in plain language.
 - Explain what changed, why it is needed, and how to try it on the phone.
 - Introduce concepts gradually and connect explanations to the actual code.
