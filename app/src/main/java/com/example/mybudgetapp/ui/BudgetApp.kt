@@ -149,6 +149,7 @@ private fun MonthSelector(month: YearMonth, onChange: (YearMonth) -> Unit) {
 @Composable
 private fun HomeScreen(budgets: List<SampleBudget>) {
     Text("Your month at a glance", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+    ExpensePieChart(budgets)
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Total expenses", style = MaterialTheme.typography.labelLarge)
@@ -161,10 +162,10 @@ private fun HomeScreen(budgets: List<SampleBudget>) {
     if (budgets.isEmpty()) {
         EmptyCard("A fresh month", "No sample spending or budgets for this month. Switch back to the current month to explore the preview.")
     } else {
-        budgets.sortedByDescending { it.plannedPaisa }.forEach { BudgetCard(it) }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            budgets.sortedByDescending { it.plannedPaisa }.forEach { CompactBudgetCard(it) }
+        }
     }
-    Text("Your category pie chart will appear here when the spending dashboard is added.",
-        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
 }
 
 @Composable
@@ -182,7 +183,7 @@ private fun TransactionsScreen(hasSamples: Boolean) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text((if (item.income) "+ " else "− ") + pkr(item.amountPaisa),
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (item.income) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        color = if (item.income) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -202,6 +203,35 @@ private fun BudgetsScreen(budgets: List<SampleBudget>) {
     Text("Coming soon: create a plan or copy a past month.", style = MaterialTheme.typography.bodyMedium)
 }
 
+// Home favors a quick overview; the Budgets tab retains the detailed cards.
+@Composable
+private fun CompactBudgetCard(budget: SampleBudget) {
+    val progress = if (budget.plannedPaisa > 0) {
+        budget.spentPaisa.toFloat() / budget.plannedPaisa
+    } else 0f
+    Card {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(budget.name, Modifier.weight(1f).padding(end = 8.dp),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("${(progress * 100).toInt()}% spent",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("${pkr(budget.spentPaisa)} of ${pkr(budget.plannedPaisa)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(6.dp),
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            )
+        }
+    }
+}
 @Composable
 private fun BudgetCard(budget: SampleBudget) {
     val remaining = budget.plannedPaisa - budget.spentPaisa
