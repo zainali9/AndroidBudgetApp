@@ -1,0 +1,27 @@
+# Dependencies and Expo local state
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Native build output and local IDE configuration
+.gradle/
+.idea/
+**/build/
+local.properties
+*.iml
+
+# Signing material and local environment files
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# Generated native projects and Kotlin cache
+/android/
+/ios/
+.kotlin/
