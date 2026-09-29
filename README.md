@@ -2,9 +2,9 @@
 
 The cross-platform app lives on `main`. The earlier Kotlin prototype is preserved on `master` at `ce65363`.
 
-## First checkpoint
+## Current checkpoint
 
-A TypeScript starter screen with light/dark appearance, safe screen margins, and Expo development-client support. No financial records are saved yet. Android is the first implementation/test target; iOS validation comes after the Android application is complete.
+A five-tab TypeScript budget preview with light/dark appearance, monthly sample data, an expense pie chart, compact budget cards, and Expo development-client support. No financial records are saved yet. Android is the first implementation/test target; iOS validation comes after the Android application is complete.
 
 The application identifier is `com.zaina.budgetapp`, so this app can coexist with the Kotlin prototype (`com.example.mybudgetapp`).
 
@@ -32,7 +32,7 @@ This first APK is a development build, which uses Metro on your computer to load
 | File | Purpose |
 | --- | --- |
 | `index.ts` | Registers the root React component with Expo. |
-| `App.tsx` | The starter screen: React Native components written with TypeScript and JSX. |
+| `App.tsx` | Shared state, tab navigation, theme providers, and expense preview modal. |
 | `app.json` | App name, identifiers, appearance, icons, and native configuration. |
 | `package.json` | Dependencies and development commands. |
 | `package-lock.json` | Reproducible dependency versions. |
@@ -43,8 +43,8 @@ This first APK is a development build, which uses Metro on your computer to load
 
 ## Next milestones
 
-1. Verify the starter on OnePlus 8T when connected.
-2. Recreate five tabs, compact category cards, red expenses/green income, and the pie chart below Your month at a glance.
+1. Starter installed and confirmed visible on OnePlus 8T.
+2. Five-tab design preview implemented; see Lesson 2.
 3. Add SQLite persistence and tested financial calculations using integer paisa within safe numeric bounds.
 4. Implement accounts/cards, categories, income, expenses, transfers, and credit-card repayments without double counting.
 5. Add monthly budgets, copying past plans, and a dashboard driven by stored records.
@@ -59,8 +59,14 @@ A Mac and Xcode are needed for local iOS native builds; optional cloud builds ar
 - Expo dependency compatibility check passed.
 - Expo Doctor: 21/21 checks passed.
 - Metro successfully exported the Android JavaScript bundle.
-- Device installation and visual checks are pending: no phone was connected during setup.
+- Installed on the OnePlus 8T on 2026-09-29. The owner confirmed the starter screen was visible. Metro and USB forwarding are configured.
 - npm reported 10 moderate advisories in the Expo tooling dependency chain. The suggested forced fix downgrades Expo to SDK 46; it was not applied. Review compatible upstream updates before release.
 - Native Android debug build succeeded (first run: 36m 43s, including native setup/downloads).
 - APK metadata verified: com.zaina.budgetapp, version 1.0.0, ARM64, minimum API 24, target API 36.
 - APK location: android/app/build/outputs/apk/debug/app-debug.apk (approximately 61 MiB).
+
+## Beginner walkthrough
+
+Read [Lesson 1: the Expo starter explained](docs/01-expo-starter-explained.md) for a detailed explanation of the setup, code, build process, USB testing, and daily commands.
+
+Read [Lesson 2: navigation and screens](docs/02-navigation-and-screens.md) for state, props, reusable components, chart calculations, and phone checks.

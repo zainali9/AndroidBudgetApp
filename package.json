@@ -9,18 +9,20 @@
     "expo-system-ui": "~57.0.4",
     "react": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-safe-area-context": "~5.7.0"
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start --dev-client",
+    "start": "node --dns-result-order=ipv4first ./node_modules/expo/bin/cli start --dev-client",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
-    "build:android": "powershell -NoProfile -File scripts/build-android.ps1"
+    "build:android": "powershell -NoProfile -File scripts/build-android.ps1",
+    "test": "node --test tests/sampleData.test.mjs"
   },
   "private": true
 }
