@@ -4,7 +4,7 @@ The cross-platform app lives on `main`. The earlier Kotlin prototype is preserve
 
 ## Current checkpoint
 
-A five-tab TypeScript budget preview with light/dark appearance, monthly sample data, an expense pie chart, compact budget cards, and Expo development-client support. No financial records are saved yet. Android is the first implementation/test target; iOS validation comes after the Android application is complete.
+A five-tab TypeScript budget preview with light/dark appearance, monthly sample data, an expense pie chart, compact budget cards, and Expo development-client support. The local SQLite foundation initializes on startup. Screens still use labeled sample data; entry forms are the next milestone. Android is the first implementation/test target; iOS validation comes after the Android application is complete.
 
 The application identifier is `com.zaina.budgetapp`, so this app can coexist with the Kotlin prototype (`com.example.mybudgetapp`).
 
@@ -45,7 +45,7 @@ This first APK is a development build, which uses Metro on your computer to load
 
 1. Starter installed and confirmed visible on OnePlus 8T.
 2. Five-tab design preview implemented; see Lesson 2.
-3. Add SQLite persistence and tested financial calculations using integer paisa within safe numeric bounds.
+3. SQLite schema, startup initialization, repository and tested financial rules implemented. Device startup verification pending reconnection.
 4. Implement accounts/cards, categories, income, expenses, transfers, and credit-card repayments without double counting.
 5. Add monthly budgets, copying past plans, and a dashboard driven by stored records.
 6. Add manual backup/restore, migration tests, and standalone Android release checks.
@@ -70,3 +70,5 @@ A Mac and Xcode are needed for local iOS native builds; optional cloud builds ar
 Read [Lesson 1: the Expo starter explained](docs/01-expo-starter-explained.md) for a detailed explanation of the setup, code, build process, USB testing, and daily commands.
 
 Read [Lesson 2: navigation and screens](docs/02-navigation-and-screens.md) for state, props, reusable components, chart calculations, and phone checks.
+
+Read [Lesson 3: local storage and financial rules](docs/03-local-storage-and-financial-rules.md) for the database schema, migrations, exact money handling, and transfer/credit rules.

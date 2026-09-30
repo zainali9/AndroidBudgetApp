@@ -25,3 +25,11 @@ keystore.properties
 /android/
 /ios/
 .kotlin/
+
+# Local financial database files and SQLite journals
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

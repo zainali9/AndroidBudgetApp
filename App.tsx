@@ -7,12 +7,14 @@ import { budgetsForMonth, currentMonth } from './src/sampleData';
 import { Heading, Icon, InfoRow, Label, MonthSelector, Tab } from './src/components/Common';
 import { BudgetScreens } from './src/screens/BudgetScreens';
 
+import { DatabaseProvider } from './src/data/DatabaseProvider';
+
 const tabs: Tab[] = ['Home', 'Transactions', 'Budgets', 'Accounts', 'Settings'];
 
 export default function App() {
   const dark = useColorScheme() === 'dark';
   return <SafeAreaProvider><ThemeContext.Provider value={dark ? darkTheme : lightTheme}>
-    <StatusBar style={dark ? 'light' : 'dark'} /><BudgetApp />
+    <StatusBar style={dark ? 'light' : 'dark'} /><DatabaseProvider><BudgetApp /></DatabaseProvider>
   </ThemeContext.Provider></SafeAreaProvider>;
 }
 

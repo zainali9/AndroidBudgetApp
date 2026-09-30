@@ -128,3 +128,11 @@ Introduce a versioned local SQLite schema and tested financial rules. Accounts, 
 - Node's test runner reports a module-type detection warning when importing the TypeScript helper; all tests complete successfully.
 - Native build and device checks are recorded below when completed.
 - Native Android debug build succeeded in 5m 15s with the SVG dependency included. Device interaction checks remain pending because the OnePlus is locked.
+
+### Device follow-up
+
+The updated APK installed successfully on the OnePlus 8T (2026-09-29, device lastUpdateTime 18:49:19). The existing Metro process became unresponsive; restarting it restored Android bundling (803 modules). Phone interaction checks still require an unlocked screen. If a development build appears blank, check that Metro is responding and USB forwarding is active before rebuilding the APK.
+
+### Owner confirmation — 2026-09-30
+
+The owner confirmed that month arrows, shared month selection between tabs, and the expense preview with Android Back dismissal work. Automated device inspection separately confirmed Home, Transactions and Budgets content; screenshots were black, so color/layout inspection was not independently completed.
