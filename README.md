@@ -45,7 +45,7 @@ This first APK is a development build, which uses Metro on your computer to load
 
 1. Starter installed and confirmed visible on OnePlus 8T.
 2. Five-tab design preview implemented; see Lesson 2.
-3. SQLite schema, startup initialization, repository and tested financial rules implemented. Device startup verification pending reconnection.
+3. SQLite schema, startup initialization, repository and tested financial rules implemented. Native database creation and reopening verified on OnePlus 8T.
 4. Implement accounts/cards, categories, income, expenses, transfers, and credit-card repayments without double counting.
 5. Add monthly budgets, copying past plans, and a dashboard driven by stored records.
 6. Add manual backup/restore, migration tests, and standalone Android release checks.

@@ -131,6 +131,10 @@ Reference: [Expo SQLite documentation](https://docs.expo.dev/versions/latest/sdk
 - All 11 tests passed (4 preview tests and 7 storage tests).
 - Strict TypeScript checking passed.
 - Android JavaScript bundle exported successfully (741 modules).
-- The OnePlus disconnected during verification. Native installation and SQLite initialization on the device are pending reconnection; desktop persistence tests are not a substitute for that check.
+- Initial device verification was interrupted by disconnection; the successful follow-up is recorded below.
 - Screens remain sample-only, and no financial fixtures are inserted into the device database.
 - Native Android debug build passed in 5m 41s. Generated Expo module registration includes `expo.modules.sqlite.SQLiteModule`. APK: `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+### Android device verification — 2026-09-30
+
+The SQLite build installed successfully on the OnePlus 8T. Metro was restarted after becoming unresponsive. The app created `files/SQLite/budget.db` in its private application storage and reached Home. After force-stopping the app, an empty database snapshot (including its WAL) was inspected locally: schema version 1, all six expected tables, `integrity_check = ok`, and zero transactions. Reopening the app reached Home again with the existing database. This verifies native initialization and reopening; saving user records through forms remains a later milestone. The snapshot stays in ignored build output and is not committed.
