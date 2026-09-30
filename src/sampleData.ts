@@ -1,4 +1,4 @@
-export type Budget = { name: string; planned: number; spent: number; color: string };
+export type Budget = { id?: number; name: string; planned: number; spent: number; color: string };
 export type Transaction = { name: string; detail: string; amount: number; kind: 'income' | 'expense' };
 
 // Preview records only. Amounts are integer paisa, not floating-point rupees.

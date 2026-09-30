@@ -93,7 +93,35 @@ export type Entry = { amount: number; date: string; accountId: number; note?: st
   { kind: 'transfer'; destinationId: number }
 );
 type Row = { kind: Entry['kind']; amount: number; account_id: number; destination_id: number | null };
+export type Category = { id: number; name: string; parent_id: number | null };
+export type DebitCard = { id: number; name: string; account_id: number };
+export type IncomeSource = { id: number; name: string };
+export type SavedTransaction = { id: number; kind: Entry['kind']; amount: number; date: string; note: string; account: string; destination: string | null; category: string | null; source: string | null; card: string | null };
+export function monthKey(month: number): string {
+  if (!Number.isInteger(month) || month < 1900 * 12 || month > 9999 * 12 + 11) throw new Error('Choose a month between 1900 and 9999');
+  return `${Math.floor(month / 12)}-${String(month % 12 + 1).padStart(2, '0')}`;
+}
+export function localDate(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 export class BudgetRepository {
+  accounts(): (Account & { balance: number })[] {
+    return this.db.getAllSync<Account>('SELECT * FROM accounts ORDER BY id').map(account => ({ ...account, balance: this.balance(account.id) }));
+  }
+  categories(): Category[] { return this.db.getAllSync<Category>('SELECT * FROM categories ORDER BY id'); }
+  debitCards(): DebitCard[] { return this.db.getAllSync<DebitCard>('SELECT * FROM cards ORDER BY id'); }
+  incomeSources(): IncomeSource[] { return this.db.getAllSync<IncomeSource>('SELECT * FROM income_sources ORDER BY id'); }
+  transactions(month: string): SavedTransaction[] {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Invalid month');
+    return this.db.getAllSync<SavedTransaction>(`SELECT t.id, t.kind, t.amount, t.date, t.note, a.name AS account,
+      d.name AS destination, CASE WHEN p.id IS NULL THEN c.name ELSE p.name || ' / ' || c.name END AS category,
+      s.name AS source, card.name AS card
+      FROM transactions t JOIN accounts a ON a.id = t.account_id
+      LEFT JOIN accounts d ON d.id = t.destination_id LEFT JOIN categories c ON c.id = t.category_id
+      LEFT JOIN categories p ON p.id = c.parent_id LEFT JOIN income_sources s ON s.id = t.source_id
+      LEFT JOIN cards card ON card.id = t.card_id
+      WHERE t.date >= ? AND t.date <= ? ORDER BY t.date DESC, t.id DESC`, `${month}-01`, `${month}-31`);
+  }
   readonly db: Database;
   constructor(db: Database) { this.db = db; }
   createAccount(name: string, kind: AccountKind, opening = 0): number {
@@ -143,6 +171,7 @@ export class BudgetRepository {
         entry.kind === 'expense' ? entry.cardId ?? null : null);
       this.balance(entry.accountId);
       if (entry.kind === 'transfer') this.balance(entry.destinationId);
+      if (entry.kind === 'expense') this.spending(entry.date.slice(0, 7)).reduce((total, item) => addMoney(total, item.spent), 0);
       return result.lastInsertRowId;
     });
   }

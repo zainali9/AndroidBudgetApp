@@ -98,3 +98,49 @@ test('dates and amounts validate before writing; spending excludes other months'
   assert.equal(repo.spending('2026-10')[0].spent, 250);
 });
 
+
+test('saved entries reopen with labels, card links and deterministic monthly ordering', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'budget-entry-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, 'entries.db');
+  const first = open(path);
+  migrate(first.db);
+  const bank = first.repo.createAccount('Bank', 'bank', 100000);
+  const card = first.repo.createDebitCard('Daily debit', bank);
+  const cash = first.repo.createAccount('Wallet', 'cash');
+  const parent = first.repo.createCategory('Food');
+  const child = first.repo.createCategory('Groceries', parent);
+  const source = first.repo.createIncomeSource('Freelance');
+  first.repo.record({ kind: 'expense', amount: 1250, date, accountId: bank, categoryId: child, cardId: card, note: "Owner's purchase" });
+  first.repo.record({ kind: 'income', amount: 5000, date, accountId: bank, sourceId: source });
+  first.repo.record({ kind: 'transfer', amount: 2000, date, accountId: bank, destinationId: cash });
+  first.sqlite.close();
+  const second = open(path);
+  try {
+    migrate(second.db);
+    const rows = second.repo.transactions('2026-09');
+    assert.deepEqual(rows.map(r => r.kind), ['transfer', 'income', 'expense']);
+    assert.equal(rows[0].destination, 'Wallet');
+    assert.equal(rows[1].source, 'Freelance');
+    assert.equal(rows[2].category, 'Food / Groceries');
+    assert.equal(rows[2].card, 'Daily debit');
+    assert.equal(rows[2].note, "Owner's purchase");
+    assert.equal(second.repo.accounts()[0].balance, 101750);
+    assert.equal(second.repo.accounts()[1].balance, 2000);
+    assert.equal(second.repo.categories().length, 2);
+    assert.equal(second.repo.debitCards()[0].account_id, bank);
+    assert.equal(second.repo.incomeSources()[0].name, 'Freelance');
+    assert.deepEqual(second.repo.transactions('2026-10'), []);
+  } finally { second.sqlite.close(); }
+});
+test('a monthly total that cannot be displayed safely is rejected atomically', t => {
+  const { repo } = setup(t);
+  const first = repo.createAccount('First', 'bank', Number.MAX_SAFE_INTEGER);
+  const second = repo.createAccount('Second', 'bank', 100);
+  const category = repo.createCategory('Large');
+  const other = repo.createCategory('Other');
+  repo.record({ kind: 'expense', amount: Number.MAX_SAFE_INTEGER, date, accountId: first, categoryId: category });
+  assert.throws(() => repo.record({ kind: 'expense', amount: 1, date, accountId: second, categoryId: other }));
+  assert.equal(repo.balance(second), 100);
+  assert.equal(repo.transactions('2026-09').length, 1);
+});
