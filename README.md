@@ -46,7 +46,7 @@ This first APK is a development build, which uses Metro on your computer to load
 1. Starter installed and confirmed visible on OnePlus 8T.
 2. Five-tab design preview implemented; see Lesson 2.
 3. SQLite schema, startup initialization, repository and tested financial rules implemented. Native database creation and reopening verified on OnePlus 8T.
-4. Account/card, category, income-source and transaction creation implemented. Transfers and credit-card repayments avoid double counting. Editing/deleting saved records remains future work.
+4. Account/card, category, income-source and transaction creation implemented. Transfers and credit-card repayments avoid double counting. Transactions support editing and deletion with confirmation.
 5. Add monthly budgets, copying past plans, and a dashboard driven by stored records.
 6. Add manual backup/restore, migration tests, and standalone Android release checks.
 7. Test and adapt on iOS only after Android is complete.
@@ -74,3 +74,5 @@ Read [Lesson 2: navigation and screens](docs/02-navigation-and-screens.md) for s
 Read [Lesson 3: local storage and financial rules](docs/03-local-storage-and-financial-rules.md) for the database schema, migrations, exact money handling, and transfer/credit rules.
 
 Read [Lesson 4: forms and saved records](docs/04-forms-and-saved-records.md) for first-use steps and how drafts become saved transactions.
+
+Read [Lesson 5: daily use, corrections and backups](docs/05-daily-use-corrections-and-backups.md) for standalone builds, transaction corrections, and backup/restore. Run `npm.cmd run build:standalone` for the personal Android APK with bundled code.

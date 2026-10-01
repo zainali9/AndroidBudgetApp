@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BudgetRepository, migrate, parsePkr } from '../src/data/storage.ts';
+import { BudgetRepository, migrate, parsePkr, parseBackup } from '../src/data/storage.ts';
 function open(path = ':memory:') {
   const sqlite = new DatabaseSync(path);
   const db = {
@@ -143,4 +143,92 @@ test('a monthly total that cannot be displayed safely is rejected atomically', t
   assert.throws(() => repo.record({ kind: 'expense', amount: 1, date, accountId: second, categoryId: other }));
   assert.equal(repo.balance(second), 100);
   assert.equal(repo.transactions('2026-09').length, 1);
+});
+
+test('editing an expense changes its original row, account and month; delete reverses it', t => {
+  const { repo } = setup(t);
+  const bank = repo.createAccount('Bank', 'bank', 10000);
+  const cash = repo.createAccount('Cash', 'cash', 5000);
+  const category = repo.createCategory('Food');
+  const id = repo.record({ kind: 'expense', amount: 1000, date, accountId: bank, categoryId: category });
+  repo.record({ kind: 'expense', amount: 2500, date: '2026-10-01', accountId: cash, categoryId: category, note: 'Corrected' }, id);
+  assert.equal(repo.balance(bank), 10000);
+  assert.equal(repo.balance(cash), 2500);
+  assert.equal(repo.transactions('2026-09').length, 0);
+  assert.equal(repo.transactions('2026-10')[0].id, id);
+  assert.equal(repo.entry(id).note, 'Corrected');
+  repo.deleteEntry(id);
+  assert.equal(repo.balance(cash), 5000);
+  assert.equal(repo.spending('2026-10').length, 0);
+  assert.throws(() => repo.deleteEntry(id));
+});
+test('invalid edits and unsafe deletion roll back and retain original records', t => {
+  const { repo } = setup(t);
+  const accountId = repo.createAccount('Debt', 'credit', -Number.MAX_SAFE_INTEGER);
+  const sourceId = repo.createIncomeSource('Adjustment');
+  const categoryId = repo.createCategory('Food');
+  const id = repo.record({ kind: 'income', amount: 10, date, accountId, sourceId });
+  repo.record({ kind: 'expense', amount: 10, date, accountId, categoryId });
+  assert.throws(() => repo.deleteEntry(id));
+  assert.throws(() => repo.record({ kind: 'income', amount: 1, date, accountId, sourceId }, id));
+  assert.equal(repo.entry(id).amount, 10);
+  assert.equal(repo.balance(accountId), -Number.MAX_SAFE_INTEGER);
+});
+test('deleting a credit repayment restores both balances without adding spending', t => {
+  const { repo } = setup(t);
+  const bank = repo.createAccount('Bank', 'bank', 50000);
+  const credit = repo.createAccount('Credit', 'credit', -10000);
+  const id = repo.record({ kind: 'transfer', amount: 4000, date, accountId: bank, destinationId: credit });
+  repo.deleteEntry(id);
+  assert.equal(repo.balance(bank), 50000);
+  assert.equal(repo.balance(credit), -10000);
+  assert.deepEqual(repo.spending('2026-09'), []);
+});
+test('backup roundtrip preserves all tables, IDs, balances and planned amounts', t => {
+  const { repo, db } = setup(t);
+  const bank = repo.createAccount('Bank', 'bank', 50000);
+  const credit = repo.createAccount('Credit', 'credit', -1000);
+  const card = repo.createDebitCard('Debit', bank);
+  const parent = repo.createCategory('Food');
+  const child = repo.createCategory('Groceries', parent);
+  repo.createIncomeSource('Salary');
+  repo.record({ kind: 'expense', amount: 125, date, accountId: bank, categoryId: child, cardId: card });
+  repo.record({ kind: 'transfer', amount: 200, date, accountId: bank, destinationId: credit });
+  db.runSync('INSERT INTO budget_plans(month, category_id, amount) VALUES (?, ?, ?)', '2026-09', parent, 10000);
+  const backup = repo.exportBackup();
+  const target = open(); t.after(() => target.sqlite.close()); migrate(target.db);
+  target.repo.createAccount('Will be replaced', 'cash');
+  target.repo.restoreBackup(backup);
+  assert.deepEqual(JSON.parse(target.repo.exportBackup()).tables, JSON.parse(backup).tables);
+  assert.equal(target.repo.balance(bank), 49675);
+  assert.equal(target.repo.balance(credit), -800);
+  target.repo.restoreBackup(backup);
+  assert.equal(target.repo.transactions('2026-09').length, 2);
+});
+test('malformed, incompatible and relationally invalid backups never replace current data', t => {
+  const { repo } = setup(t);
+  const id = repo.createAccount('Keep me', 'cash', 123);
+  const original = JSON.parse(repo.exportBackup());
+  const broken = [null, { ...original, version: 99 }, { ...original, currency: 'USD' }, { ...original, tables: {} }];
+  const invalidCard = structuredClone(original);
+  invalidCard.tables.cards.push({ id: 1, name: 'Wrong bank', account_id: id });
+  broken.push(invalidCard);
+  const missingReference = structuredClone(original);
+  missingReference.tables.transactions.push({ id: 1, kind: 'expense', amount: 100, date, note: '', account_id: id, destination_id: null, category_id: 999, source_id: null, card_id: null });
+  broken.push(missingReference);
+  const duplicate = structuredClone(original); duplicate.tables.accounts.push(duplicate.tables.accounts[0]); broken.push(duplicate);
+  const badDate = structuredClone(original);
+  badDate.tables.transactions.push({ id: 1, kind: 'income', amount: 100, date: '2026-02-30', note: '', account_id: id, destination_id: null, category_id: null, source_id: 1, card_id: null });
+  broken.push(badDate);
+  for (const input of broken) {
+    assert.throws(() => repo.restoreBackup(JSON.stringify(input)));
+    assert.equal(repo.balance(id), 123);
+    assert.deepEqual(JSON.parse(repo.exportBackup()).tables, original.tables);
+  }
+  assert.throws(() => repo.restoreBackup('{broken'));
+});
+
+test('backup size limit measures UTF-8 bytes consistently for multilingual text', () => {
+  const text = '"' + '€'.repeat(3500000) + '"';
+  assert.throws(() => parseBackup(text), /10 MB limit/);
 });

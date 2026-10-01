@@ -1,9 +1,11 @@
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { Budget, pkr, spendingTotal } from '../sampleData';
 import { Account, Category, DebitCard, IncomeSource, SavedTransaction } from '../data/storage';
 import { useTheme } from '../theme';
 import { Card, EmptyState, Heading, InfoRow, Label, Tab } from '../components/Common';
 import { Action } from '../components/FormControls';
+import { BackupControls } from '../components/BackupControls';
+import { useRepository } from '../data/DatabaseProvider';
 import { ExpensePieChart } from '../components/ExpensePieChart';
 import { FormKind } from './EntryForm';
 
@@ -11,8 +13,15 @@ export type ScreenData = {
   accounts: (Account & { balance: number })[]; categories: Category[]; cards: DebitCard[];
   sources: IncomeSource[]; transactions: SavedTransaction[]; spending: Budget[];
 };
-export function BudgetScreens({ tab, data, onAdd }: { tab: Tab; data: ScreenData; onAdd: (kind: FormKind) => void }) {
+export function BudgetScreens({ tab, data, onAdd, onEdit, onChanged }: { tab: Tab; data: ScreenData; onAdd: (kind: FormKind) => void; onEdit: (id: number) => void; onChanged: () => void }) {
   const theme = useTheme();
+  const repo = useRepository();
+  const remove = (id: number) => Alert.alert('Delete this transaction?', 'Its effect on balances and spending will be reversed. This cannot be undone without a backup.', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: () => {
+      try { repo.deleteEntry(id); onChanged(); } catch { Alert.alert('Could not delete', 'The record was kept because deleting it would create an invalid balance.'); }
+    } },
+  ]);
   if (tab === 'Home') return <>
     <Heading>Your month at a glance</Heading>
     <ExpensePieChart budgets={data.spending} />
@@ -31,6 +40,7 @@ export function BudgetScreens({ tab, data, onAdd }: { tab: Tab; data: ScreenData
       <Label muted>{item.date} · {item.account}{item.destination ? ` → ${item.destination}` : ''}{item.card ? ` · ${item.card}` : ''}</Label>
       {!!item.note && <Label>{item.note}</Label>}
       <Label style={{ fontWeight: '600', fontSize: 17, color: item.kind === 'income' ? theme.income : item.kind === 'expense' ? theme.expense : theme.text }}>{item.kind === 'income' ? '+' : item.kind === 'expense' ? '−' : '↔'} {pkr(item.amount)}</Label>
+      <View style={{ flexDirection: 'row', gap: 8 }}><Action onPress={() => onEdit(item.id)}>Edit</Action><Action onPress={() => remove(item.id)}>Delete</Action></View>
     </Card>) : <EmptyState title="No transactions" detail="No saved transactions for this month. Use + for an expense." />}
   </>;
   if (tab === 'Budgets') return <><Heading>Give every rupee a plan</Heading><EmptyState title="Budget planning is next" detail="You can record expenses now. Setting monthly limits and copying a past plan will be added in the next milestone." /></>;
@@ -50,7 +60,7 @@ export function BudgetScreens({ tab, data, onAdd }: { tab: Tab; data: ScreenData
     {data.categories.length ? data.categories.map(category => <InfoRow key={category.id} title={category.name} detail={category.parent_id ? `Under ${data.categories.find(p => p.id === category.parent_id)?.name}` : 'Top-level category'} />) : <Label muted>No categories yet. Add one before recording expenses.</Label>}
     <Heading>Income sources</Heading><Action onPress={() => onAdd('source')}>Add income source</Action>
     {data.sources.map(source => <InfoRow key={source.id} title={source.name} detail="Income source" />)}
-    <InfoRow title="Storage" detail="Records are saved on this device. Backup and restore are coming later." />
+    <BackupControls onChanged={onChanged} />
     <InfoRow title="Appearance" detail="Follows your phone's light or dark theme" />
   </>;
 }

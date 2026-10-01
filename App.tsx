@@ -8,7 +8,7 @@ import { Icon, Label, MonthSelector, Tab } from './src/components/Common';
 import { Action } from './src/components/FormControls';
 import { BudgetScreens, ScreenData } from './src/screens/BudgetScreens';
 import { DatabaseProvider, useRepository } from './src/data/DatabaseProvider';
-import { monthKey } from './src/data/storage';
+import { Entry, monthKey } from './src/data/storage';
 import { EntryForm, FormKind } from './src/screens/EntryForm';
 
 const tabs: Tab[] = ['Home', 'Transactions', 'Budgets', 'Accounts', 'Settings'];
@@ -23,6 +23,8 @@ function BudgetApp() {
   const [tab, setTab] = useState<Tab>('Home');
   const [month, setMonth] = useState(currentMonth);
   const [form, setForm] = useState<FormKind | null>(null);
+  const [editing, setEditing] = useState<{ id: number; entry: Entry } | null>(null);
+  const openForm = (kind: FormKind) => { setEditing(null); setForm(kind); };
   const [revision, setRevision] = useState(0);
   const repo = useRepository();
   // Saving changes revision, which refreshes the shared data supplied to all screens.
@@ -52,9 +54,9 @@ function BudgetApp() {
       <ScrollView key={tab} contentContainerStyle={s.content}>
         <View style={[s.notice, { backgroundColor: theme.tint }]}><Label style={{ fontSize: 11, fontWeight: '600', letterSpacing: 0.5 }}>ON THIS DEVICE · PKR</Label></View>
         {['Home', 'Transactions', 'Budgets'].includes(tab) && <MonthSelector month={month} onChange={changeMonth} />}
-        {data ? <BudgetScreens tab={tab} data={data} onAdd={setForm} /> : <><Label>Could not load your records. Your data has not been reset.</Label><Action onPress={() => setRevision(value => value + 1)}>Try again</Action></>}
+        {data ? <BudgetScreens tab={tab} data={data} onAdd={openForm} onChanged={() => setRevision(value => value + 1)} onEdit={id => { const entry = repo.entry(id); setEditing({ id, entry }); setForm(entry.kind); }} /> : <><Label>Could not load your records. Your data has not been reset.</Label><Action onPress={() => setRevision(value => value + 1)}>Try again</Action></>}
       </ScrollView>
-      {data && (tab === 'Home' || tab === 'Transactions') && <Pressable accessibilityRole="button" accessibilityLabel="Add expense" onPress={() => setForm('expense')} style={({ pressed }) => [s.fab, { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 }]}>
+      {data && (tab === 'Home' || tab === 'Transactions') && <Pressable accessibilityRole="button" accessibilityLabel="Add expense" onPress={() => openForm('expense')} style={({ pressed }) => [s.fab, { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 }]}>
         <Icon name="add" color={theme.background} />
       </Pressable>}
     </View>
@@ -64,7 +66,7 @@ function BudgetApp() {
         <Text style={[s.tabLabel, { color: tab === item ? theme.primary : theme.muted }]}>{item}</Text>
       </Pressable>)}
     </View>
-    {form && <EntryForm key={form} kind={form} onClose={() => setForm(null)} onSaved={date => {
+    {form && <EntryForm key={`${form}-${editing?.id ?? 'new'}`} kind={form} initial={editing?.entry} entryId={editing?.id} onClose={() => setForm(null)} onSaved={date => {
       setForm(null);
       if (date) {
         const [year, number] = date.split('-').map(Number);

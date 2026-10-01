@@ -33,3 +33,7 @@ keystore.properties
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
+# User-exported financial backups
+my-budget*.json
+budget-before-restore.json

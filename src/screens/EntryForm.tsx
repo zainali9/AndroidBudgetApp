@@ -2,28 +2,28 @@ import { useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRepository } from '../data/DatabaseProvider';
-import { AccountKind, localDate, parsePkr } from '../data/storage';
+import { AccountKind, Entry, localDate, parsePkr } from '../data/storage';
 import { Heading, Label } from '../components/Common';
 import { Action, Choice, Field } from '../components/FormControls';
 import { useTheme } from '../theme';
 
 export type FormKind = 'account' | 'card' | 'category' | 'source' | 'expense' | 'income' | 'transfer';
 const titles: Record<FormKind, string> = { account: 'Add account', card: 'Add debit card', category: 'Add category', source: 'Add income source', expense: 'Add expense', income: 'Add income', transfer: 'Transfer / repay card' };
-export function EntryForm({ kind, onClose, onSaved }: { kind: FormKind; onClose: () => void; onSaved: (date?: string) => void }) {
+export function EntryForm({ kind, onClose, onSaved, initial, entryId }: { kind: FormKind; onClose: () => void; onSaved: (date?: string) => void; initial?: Entry; entryId?: number }) {
   const repo = useRepository();
   const theme = useTheme();
   const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(initial ? `${Math.floor(initial.amount / 100)}.${String(initial.amount % 100).padStart(2, '0')}` : '');
   const [accountKind, setAccountKind] = useState<AccountKind>('bank');
   const [negative, setNegative] = useState('positive');
-  const [account, setAccount] = useState('');
-  const [destination, setDestination] = useState('');
-  const [category, setCategory] = useState('');
+  const [account, setAccount] = useState(initial ? String(initial.accountId) : '');
+  const [destination, setDestination] = useState(initial?.kind === 'transfer' ? String(initial.destinationId) : '');
+  const [category, setCategory] = useState(initial?.kind === 'expense' ? String(initial.categoryId) : '');
   const [parent, setParent] = useState('');
-  const [source, setSource] = useState('');
-  const [card, setCard] = useState('');
-  const [date, setDate] = useState(localDate);
-  const [note, setNote] = useState('');
+  const [source, setSource] = useState(initial?.kind === 'income' ? String(initial.sourceId) : '');
+  const [card, setCard] = useState(initial?.kind === 'expense' && initial.cardId ? String(initial.cardId) : '');
+  const [date, setDate] = useState(initial?.date ?? localDate());
+  const [note, setNote] = useState(initial?.note ?? '');
   const [error, setError] = useState('');
   const saving = useRef(false);
   const [saved, setSaved] = useState(false);
@@ -34,7 +34,9 @@ export function EntryForm({ kind, onClose, onSaved }: { kind: FormKind; onClose:
   const transaction = ['expense', 'income', 'transfer'].includes(kind);
   const options = (items: { id: number; name: string }[]) => items.map(item => ({ value: String(item.id), label: item.name }));
   const chooseId = (value: string, label: string) => { if (!value) throw new Error(`Choose ${label}`); return Number(value); };
-  const dirty = Boolean(accountKind !== 'bank' || negative !== 'positive' || name || amount || account || destination || category || parent || source || card || note || date !== localDate());
+  const draft = JSON.stringify([name, amount, accountKind, negative, account, destination, category, parent, source, card, date, note]);
+  const original = useRef(draft);
+  const dirty = draft !== original.current;
   const close = () => {
     if (!dirty) { onClose(); return; }
     Alert.alert('Discard this entry?', 'Your unsaved changes will be lost.', [{ text: 'Keep editing', style: 'cancel' }, { text: 'Discard', style: 'destructive', onPress: onClose }]);
@@ -50,12 +52,12 @@ export function EntryForm({ kind, onClose, onSaved }: { kind: FormKind; onClose:
       else if (kind === 'source') repo.createIncomeSource(name);
       else {
         const common = { amount: parsePkr(amount), date, note, accountId: chooseId(account, 'an account') };
-        if (kind === 'expense') repo.record({ ...common, kind, categoryId: chooseId(category, 'a category'), cardId: card ? Number(card) : undefined });
-        else if (kind === 'income') repo.record({ ...common, kind, sourceId: chooseId(source, 'an income source') });
+        if (kind === 'expense') repo.record({ ...common, kind, categoryId: chooseId(category, 'a category'), cardId: card ? Number(card) : undefined }, entryId);
+        else if (kind === 'income') repo.record({ ...common, kind, sourceId: chooseId(source, 'an income source') }, entryId);
         else {
           const destinationId = chooseId(destination, 'a destination account');
           if (destinationId === common.accountId) throw new Error('Choose different source and destination accounts');
-          repo.record({ ...common, kind, destinationId });
+          repo.record({ ...common, kind, destinationId }, entryId);
         }
       }
       setSaved(true);
@@ -70,7 +72,7 @@ export function EntryForm({ kind, onClose, onSaved }: { kind: FormKind; onClose:
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: 40 }}>
-          <Heading>{titles[kind]}</Heading>
+          <Heading>{entryId !== undefined ? `Edit ${kind}` : titles[kind]}</Heading>
           {!transaction && <Field label="Name" value={name} onChange={setName} />}
           {kind === 'account' && <>
             <Choice label="Account type" value={accountKind} options={[{ value: 'bank', label: 'Bank' }, { value: 'cash', label: 'Cash' }, { value: 'credit', label: 'Credit card' }]} onChange={value => { setAccountKind(value as AccountKind); setNegative(value === 'credit' ? 'negative' : 'positive'); }} />

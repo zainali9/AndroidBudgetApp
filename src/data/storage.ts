@@ -156,23 +156,70 @@ export class BudgetRepository {
     if (value < -BigInt(MAX) || value > BigInt(MAX)) throw new Error('Balance is too large');
     return Number(value);
   }
-  record(entry: Entry): number {
+  record(entry: Entry, id?: number): number {
     money(entry.amount);
     if (entry.amount <= 0) throw new Error('Amount must be greater than zero');
     dateOnly(entry.date);
     if ((entry.note ?? '').length > 500) throw new Error('Note must be 500 characters or fewer');
     return atomic(this.db, () => {
       this.account(entry.accountId);
-      const result = this.db.runSync(`INSERT INTO transactions(kind, amount, date, note, account_id, destination_id, category_id, source_id, card_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, entry.kind, entry.amount, entry.date, entry.note ?? '', entry.accountId,
+      if (id !== undefined) this.entry(id);
+      const parameters = [entry.kind, entry.amount, entry.date, entry.note ?? '', entry.accountId,
         entry.kind === 'transfer' ? entry.destinationId : null,
         entry.kind === 'expense' ? entry.categoryId : null,
         entry.kind === 'income' ? entry.sourceId : null,
-        entry.kind === 'expense' ? entry.cardId ?? null : null);
+        entry.kind === 'expense' ? entry.cardId ?? null : null];
+      const result = id === undefined
+        ? this.db.runSync(`INSERT INTO transactions(kind, amount, date, note, account_id, destination_id, category_id, source_id, card_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ...parameters)
+        : this.db.runSync(`UPDATE transactions SET kind=?, amount=?, date=?, note=?, account_id=?, destination_id=?, category_id=?, source_id=?, card_id=? WHERE id=?`, ...parameters, id);
+      this.validateBalances();
       this.balance(entry.accountId);
       if (entry.kind === 'transfer') this.balance(entry.destinationId);
       if (entry.kind === 'expense') this.spending(entry.date.slice(0, 7)).reduce((total, item) => addMoney(total, item.spent), 0);
-      return result.lastInsertRowId;
+      return id ?? result.lastInsertRowId;
+    });
+  }
+  entry(id: number): Entry {
+    const row = this.db.getFirstSync<{ kind: Entry['kind']; amount: number; date: string; note: string; account_id: number; destination_id: number; category_id: number; source_id: number; card_id: number | null }>('SELECT * FROM transactions WHERE id = ?', id);
+    if (!row) throw new Error('Transaction no longer exists');
+    const common = { amount: row.amount, date: row.date, note: row.note, accountId: row.account_id };
+    if (row.kind === 'income') return { ...common, kind: row.kind, sourceId: row.source_id };
+    if (row.kind === 'expense') return { ...common, kind: row.kind, categoryId: row.category_id, cardId: row.card_id ?? undefined };
+    return { ...common, kind: row.kind, destinationId: row.destination_id };
+  }
+  deleteEntry(id: number): void {
+    atomic(this.db, () => {
+      this.entry(id);
+      this.db.runSync('DELETE FROM transactions WHERE id = ?', id);
+      this.validateBalances();
+    });
+  }
+  private validateBalances(): void {
+    for (const row of this.db.getAllSync<{ id: number }>('SELECT id FROM accounts')) this.balance(row.id);
+  }
+  exportBackup(): string {
+    return atomic(this.db, () => JSON.stringify({ format: 'my-budget', version: 1, currency: 'PKR', createdAt: new Date().toISOString(),
+      tables: Object.fromEntries(Object.keys(backupColumns).map(table => [table, this.db.getAllSync(`SELECT * FROM ${table}`)])) }, null, 2));
+  }
+  restoreBackup(text: string): void {
+    const backup = parseBackup(text);
+    atomic(this.db, () => {
+      for (const table of ['transactions', 'budget_plans', 'cards', 'categories', 'income_sources', 'accounts']) {
+        // Children must go first even when a parent category was created after its child in a backup.
+        if (table === 'categories') this.db.runSync('DELETE FROM categories WHERE parent_id IS NOT NULL');
+        this.db.execSync(`DELETE FROM ${table}`);
+      }
+      for (const [table, columns] of Object.entries(backupColumns)) {
+        const rows = [...backup.tables[table]];
+        if (table === 'categories') rows.sort((a, b) => Number(a.parent_id !== null) - Number(b.parent_id !== null));
+        for (const row of rows) this.db.runSync(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`, ...columns.map(column => row[column]));
+      }
+      for (const card of this.debitCards()) if (this.account(card.account_id).kind !== 'bank') throw new Error('Backup contains an invalid debit card');
+      const categories = this.categories();
+      for (const category of categories) if (category.parent_id !== null && categories.find(p => p.id === category.parent_id)?.parent_id !== null) throw new Error('Backup contains nested subcategories');
+      for (const plan of backup.tables.budget_plans) if (categories.find(c => c.id === plan.category_id)?.parent_id !== null) throw new Error('Budget plans must use top-level categories');
+      this.validateBalances();
+      for (const { month } of this.db.getAllSync<{ month: string }>("SELECT DISTINCT substr(date,1,7) AS month FROM transactions")) this.spending(month).reduce((total, row) => addMoney(total, row.spent), 0);
     });
   }
   spending(month: string): { categoryId: number; name: string; spent: number }[] {
@@ -188,4 +235,57 @@ export class BudgetRepository {
     }
     return [...totals.values()];
   }
+}
+
+export const BACKUP_LIMIT = 10 * 1024 * 1024;
+const backupColumns: Record<string, string[]> = {
+  accounts: ['id', 'name', 'kind', 'opening'],
+  categories: ['id', 'name', 'parent_id'],
+  income_sources: ['id', 'name'],
+  cards: ['id', 'name', 'account_id'],
+  transactions: ['id', 'kind', 'amount', 'date', 'note', 'account_id', 'destination_id', 'category_id', 'source_id', 'card_id'],
+  budget_plans: ['month', 'category_id', 'amount'],
+};
+export type Backup = { tables: Record<string, Record<string, SqlValue>[]> };
+export function parseBackup(text: string): Backup {
+  if (text.length > BACKUP_LIMIT) throw new Error('Backup is larger than the 10 MB limit');
+  // The file picker reports bytes, not JS UTF-16 length. Apply the same UTF-8 limit on export.
+  let bytes = 0;
+  for (const character of text) {
+    const code = character.codePointAt(0)!;
+    bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
+    if (bytes > BACKUP_LIMIT) throw new Error('Backup is larger than the 10 MB limit');
+  }
+  const data = JSON.parse(text);
+  if (!data || data.format !== 'my-budget' || data.version !== 1 || data.currency !== 'PKR' || !data.tables) throw new Error('Unsupported backup format, version or currency');
+  const tables: Backup['tables'] = {};
+  let count = 0;
+  for (const [table, columns] of Object.entries(backupColumns)) {
+    const values = data.tables[table];
+    if (!Array.isArray(values) || (count += values.length) > 20000) throw new Error('Backup is missing tables or exceeds 20,000 records');
+    tables[table] = values.map((value: unknown) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid backup record');
+      const input = value as Record<string, unknown>;
+      const row: Record<string, SqlValue> = {};
+      for (const column of columns) {
+        const field = input[column];
+        const nullable = ['parent_id','destination_id','category_id','source_id','card_id'].includes(column) && !(table === 'budget_plans');
+        if (field === null && nullable) { row[column] = null; continue; }
+        if (['id','account_id','parent_id','destination_id','category_id','source_id','card_id','opening','amount'].includes(column)) {
+          if (typeof field !== 'number' || !Number.isSafeInteger(field)) throw new Error('Invalid numeric value in backup');
+          if (column !== 'opening' && (field < 0 || (field === 0 && !(table === 'budget_plans' && column === 'amount')))) throw new Error('Invalid positive amount or ID in backup');
+        } else {
+          if (typeof field !== 'string') throw new Error('Invalid text value in backup');
+          if (column === 'name') named(field);
+          if (column === 'note' && field.length > 500) throw new Error('Backup note is too long');
+          if (column === 'date') dateOnly(field);
+          if (column === 'month' && !/^(19\d{2}|[2-9]\d{3})-(0[1-9]|1[0-2])$/.test(field)) throw new Error('Invalid budget month');
+          if (column === 'kind' && !(table === 'accounts' ? ['cash','bank','credit'] : ['income','expense','transfer']).includes(field)) throw new Error('Invalid record type');
+        }
+        row[column] = field as SqlValue;
+      }
+      return row;
+    });
+  }
+  return { tables };
 }
