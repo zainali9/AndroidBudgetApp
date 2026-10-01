@@ -8,8 +8,9 @@ import { Icon, Label, MonthSelector, Tab } from './src/components/Common';
 import { Action } from './src/components/FormControls';
 import { BudgetScreens, ScreenData } from './src/screens/BudgetScreens';
 import { DatabaseProvider, useRepository } from './src/data/DatabaseProvider';
-import { Entry, monthKey } from './src/data/storage';
+import { Category, Entry, monthKey } from './src/data/storage';
 import { EntryForm, FormKind } from './src/screens/EntryForm';
+import { BudgetForm, CategoryForm } from './src/screens/PlanningForms';
 
 const tabs: Tab[] = ['Home', 'Transactions', 'Budgets', 'Accounts', 'Settings'];
 export default function App() {
@@ -23,6 +24,8 @@ function BudgetApp() {
   const [tab, setTab] = useState<Tab>('Home');
   const [month, setMonth] = useState(currentMonth);
   const [form, setForm] = useState<FormKind | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const [categoryEditing, setCategoryEditing] = useState<Category | null>(null);
   const [editing, setEditing] = useState<{ id: number; entry: Entry } | null>(null);
   const openForm = (kind: FormKind) => { setEditing(null); setForm(kind); };
   const [revision, setRevision] = useState(0);
@@ -32,10 +35,13 @@ function BudgetApp() {
     try {
       const key = monthKey(month);
       const palette = ['#3B9D83', '#E8AD51', '#8584D8', '#CF708B', '#4A9CBD'];
+      const categories = repo.categories();
+      const spending = repo.spending(key);
       const snapshot: ScreenData = {
-        accounts: repo.accounts(), categories: repo.categories(), cards: repo.debitCards(), sources: repo.incomeSources(),
+        accounts: repo.accounts(), categories, cards: repo.debitCards(), sources: repo.incomeSources(),
         transactions: repo.transactions(key),
-        spending: repo.spending(key).map(item => ({ id: item.categoryId, name: item.name, spent: item.spent, planned: 0, color: palette[(item.categoryId - 1) % palette.length] })),
+        plans: repo.budgetPlans(key).map(plan => ({ id: plan.categoryId, name: categories.find(c => c.id === plan.categoryId)!.name, planned: plan.amount, spent: spending.find(c => c.categoryId === plan.categoryId)?.spent ?? 0, color: palette[(plan.categoryId - 1) % palette.length] })),
+        spending: spending.map(item => ({ id: item.categoryId, name: item.name, spent: item.spent, planned: 0, color: palette[(item.categoryId - 1) % palette.length] })),
       };
       return snapshot;
     } catch { return null; }
@@ -54,7 +60,7 @@ function BudgetApp() {
       <ScrollView key={tab} contentContainerStyle={s.content}>
         <View style={[s.notice, { backgroundColor: theme.tint }]}><Label style={{ fontSize: 11, fontWeight: '600', letterSpacing: 0.5 }}>ON THIS DEVICE · PKR</Label></View>
         {['Home', 'Transactions', 'Budgets'].includes(tab) && <MonthSelector month={month} onChange={changeMonth} />}
-        {data ? <BudgetScreens tab={tab} data={data} onAdd={openForm} onChanged={() => setRevision(value => value + 1)} onEdit={id => { const entry = repo.entry(id); setEditing({ id, entry }); setForm(entry.kind); }} /> : <><Label>Could not load your records. Your data has not been reset.</Label><Action onPress={() => setRevision(value => value + 1)}>Try again</Action></>}
+        {data ? <BudgetScreens onPlan={() => setPlanning(true)} onEditCategory={setCategoryEditing} tab={tab} data={data} onAdd={openForm} onChanged={() => setRevision(value => value + 1)} onEdit={id => { const entry = repo.entry(id); setEditing({ id, entry }); setForm(entry.kind); }} /> : <><Label>Could not load your records. Your data has not been reset.</Label><Action onPress={() => setRevision(value => value + 1)}>Try again</Action></>}
       </ScrollView>
       {data && (tab === 'Home' || tab === 'Transactions') && <Pressable accessibilityRole="button" accessibilityLabel="Add expense" onPress={() => openForm('expense')} style={({ pressed }) => [s.fab, { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 }]}>
         <Icon name="add" color={theme.background} />
@@ -66,6 +72,8 @@ function BudgetApp() {
         <Text style={[s.tabLabel, { color: tab === item ? theme.primary : theme.muted }]}>{item}</Text>
       </Pressable>)}
     </View>
+    {planning && <BudgetForm month={monthKey(month)} onClose={() => setPlanning(false)} onSaved={() => { setPlanning(false); setRevision(value => value + 1); }} />}
+    {categoryEditing && <CategoryForm category={categoryEditing} onClose={() => setCategoryEditing(null)} onSaved={() => { setCategoryEditing(null); setRevision(value => value + 1); }} />}
     {form && <EntryForm key={`${form}-${editing?.id ?? 'new'}`} kind={form} initial={editing?.entry} entryId={editing?.id} onClose={() => setForm(null)} onSaved={date => {
       setForm(null);
       if (date) {

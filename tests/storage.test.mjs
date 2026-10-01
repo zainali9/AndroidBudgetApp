@@ -10,8 +10,8 @@ function open(path = ':memory:') {
   const db = {
     execSync: sql => sqlite.exec(sql),
     runSync: (sql, ...params) => { const result = sqlite.prepare(sql).run(...params); return { lastInsertRowId: Number(result.lastInsertRowid), changes: Number(result.changes) }; },
-    getAllSync: (sql, ...params) => sqlite.prepare(sql).all(...params),
-    getFirstSync: (sql, ...params) => sqlite.prepare(sql).get(...params) ?? null,
+    getAllSync: (sql, ...params) => sqlite.prepare(sql).all(...params).map(row => ({ ...row })),
+    getFirstSync: (sql, ...params) => ((row) => row ? { ...row } : null)(sqlite.prepare(sql).get(...params)),
   };
   return { sqlite, db, repo: new BudgetRepository(db) };
 }
@@ -231,4 +231,110 @@ test('malformed, incompatible and relationally invalid backups never replace cur
 test('backup size limit measures UTF-8 bytes consistently for multilingual text', () => {
   const text = '"' + '€'.repeat(3500000) + '"';
   assert.throws(() => parseBackup(text), /10 MB limit/);
+});
+
+test('monthly plans distinguish zero from unset, reject invalid saves atomically, and survive backup', t => {
+  const { repo } = setup(t);
+  const food = repo.createCategory('Food');
+  const travel = repo.createCategory('Travel');
+  const child = repo.createCategory('Groceries', food);
+  repo.saveBudget('2026-10', [{ categoryId: food, amount: 0 }, { categoryId: travel, amount: 120000 }]);
+  const before = repo.budgetPlans('2026-10');
+  assert.deepEqual(before, [{ categoryId: food, amount: 0 }, { categoryId: travel, amount: 120000 }]);
+  for (const plans of [
+    [{ categoryId: child, amount: 1 }], [{ categoryId: 999, amount: 1 }],
+    [{ categoryId: food, amount: -1 }], [{ categoryId: food, amount: 0.5 }],
+    [{ categoryId: food, amount: 1 }, { categoryId: food, amount: 2 }],
+    [{ categoryId: food, amount: Number.MAX_SAFE_INTEGER }, { categoryId: travel, amount: 1 }],
+  ]) { assert.throws(() => repo.saveBudget('2026-10', plans)); assert.deepEqual(repo.budgetPlans('2026-10'), before); }
+  for (const month of ['1899-12', '2026-00', '2026-13', '10000-01']) assert.throws(() => repo.saveBudget(month, []));
+  const backup = repo.exportBackup();
+  repo.saveBudget('2026-10', []);
+  assert.deepEqual(repo.budgetMonths(), []);
+  repo.restoreBackup(backup);
+  assert.deepEqual(repo.budgetPlans('2026-10'), before);
+});
+
+test('copy replaces allocations only and expenses follow their date without mutating plans', t => {
+  const { repo } = setup(t);
+  const bank = repo.createAccount('Bank', 'bank', 1000000);
+  const food = repo.createCategory('Food');
+  const travel = repo.createCategory('Travel');
+  const child = repo.createCategory('Groceries', food);
+  repo.saveBudget('2026-09', [{ categoryId: food, amount: 10000 }]);
+  repo.saveBudget('2026-10', [{ categoryId: travel, amount: 5000 }]);
+  const entry = { kind: 'expense', amount: 12000, date: '2026-09-30', accountId: bank, categoryId: child };
+  const id = repo.record(entry);
+  const balance = repo.balance(bank);
+  repo.copyBudget('2026-09', '2026-10');
+  assert.equal(repo.balance(bank), balance);
+  assert.equal(repo.transactions('2026-10').length, 0);
+  assert.deepEqual(repo.budgetPlans('2026-10'), [{ categoryId: food, amount: 10000 }]);
+  assert.equal(repo.spending('2026-09')[0].spent, 12000);
+  repo.record({ ...entry, date: '2026-10-01' }, id);
+  assert.deepEqual(repo.spending('2026-09'), []);
+  assert.equal(repo.spending('2026-10')[0].spent, 12000);
+  assert.equal(repo.budgetPlans('2026-10')[0].amount - repo.spending('2026-10')[0].spent, -2000);
+  for (const source of ['2026-10', '2026-11', '2026-08']) assert.throws(() => repo.copyBudget(source, '2026-10'));
+  assert.deepEqual(repo.budgetPlans('2026-10'), [{ categoryId: food, amount: 10000 }]);
+  repo.deleteEntry(id);
+  assert.deepEqual(repo.spending('2026-10'), []);
+  assert.equal(repo.budgetPlans('2026-10')[0].amount, 10000);
+});
+
+test('renaming and moving categories preserve IDs, transactions, balances, and allocations', t => {
+  const { repo } = setup(t);
+  const bank = repo.createAccount('Bank', 'bank', 10000);
+  const food = repo.createCategory('Food');
+  const home = repo.createCategory('Home');
+  const child = repo.createCategory('Groceries', food);
+  const id = repo.record({ kind: 'expense', amount: 1000, date, accountId: bank, categoryId: child });
+  repo.saveBudget('2026-09', [{ categoryId: food, amount: 3000 }]);
+  const entry = repo.entry(id);
+  repo.updateCategory(food, 'Meals', null);
+  assert.equal(repo.transactions('2026-09')[0].category, 'Meals / Groceries');
+  repo.updateCategory(child, 'Weekly shop', home);
+  assert.deepEqual(repo.spending('2026-09'), [{ categoryId: home, name: 'Home', spent: 1000 }]);
+  assert.deepEqual(repo.entry(id), entry);
+  assert.equal(repo.balance(bank), 9000);
+  assert.deepEqual(repo.budgetPlans('2026-09'), [{ categoryId: food, amount: 3000 }]);
+  repo.updateCategory(child, 'Weekly shop', null);
+  assert.equal(repo.spending('2026-09')[0].categoryId, child);
+  const backup = repo.exportBackup();
+  repo.restoreBackup(backup);
+  assert.deepEqual(repo.entry(id), entry);
+});
+
+test('invalid category edits roll back and budgeted parents cannot be silently demoted', t => {
+  const { repo } = setup(t);
+  const food = repo.createCategory('Food');
+  const home = repo.createCategory('Home');
+  const child = repo.createCategory('Groceries', food);
+  const before = repo.categories();
+  for (const [id, name, parent] of [[food, 'X', food], [food, 'X', child], [food, 'X', home], [child, 'X', 999], [child, ' ', home], [999, 'X', null]]) {
+    assert.throws(() => repo.updateCategory(id, name, parent));
+    assert.deepEqual(repo.categories(), before);
+  }
+  repo.updateCategory(child, 'Groceries', home);
+  repo.saveBudget('2026-10', [{ categoryId: food, amount: 0 }]);
+  assert.throws(() => repo.updateCategory(food, 'Moved', home), /2026-10/);
+  assert.equal(repo.categories().find(c => c.id === food).name, 'Food');
+  repo.saveBudget('2026-10', []);
+  repo.updateCategory(food, 'Moved', home);
+  assert.equal(repo.categories().find(c => c.id === food).parent_id, home);
+});
+
+test('restore rejects a budget total overflow without replacing existing records', t => {
+  const { repo } = setup(t);
+  const one = repo.createCategory('One');
+  const two = repo.createCategory('Two');
+  repo.saveBudget('2026-10', [{ categoryId: one, amount: 100 }]);
+  const before = JSON.parse(repo.exportBackup()).tables;
+  const backup = JSON.parse(repo.exportBackup());
+  backup.tables.budget_plans = [
+    { month: '2026-10', category_id: one, amount: Number.MAX_SAFE_INTEGER },
+    { month: '2026-10', category_id: two, amount: 1 },
+  ];
+  assert.throws(() => repo.restoreBackup(JSON.stringify(backup)));
+  assert.deepEqual(JSON.parse(repo.exportBackup()).tables, before);
 });

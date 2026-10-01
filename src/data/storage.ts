@@ -104,6 +104,9 @@ export function monthKey(month: number): string {
 export function localDate(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
+function validBudgetMonth(month: string): void {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month < '1900-01' || month > '9999-12') throw new Error('Choose a month between 1900 and 9999');
+}
 export class BudgetRepository {
   accounts(): (Account & { balance: number })[] {
     return this.db.getAllSync<Account>('SELECT * FROM accounts ORDER BY id').map(account => ({ ...account, balance: this.balance(account.id) }));
@@ -137,6 +140,50 @@ export class BudgetRepository {
       if (!parent || parent.parent_id !== null) throw new Error('Choose a top-level parent category');
     }
     return this.db.runSync('INSERT INTO categories(name, parent_id) VALUES (?, ?)', named(name), parentId).lastInsertRowId;
+  }
+  updateCategory(id: number, name: string, parentId: number | null): void {
+    atomic(this.db, () => {
+      if (!this.categories().some(c => c.id === id)) throw new Error('Category no longer exists');
+      if (parentId !== null) {
+        const parent = this.categories().find(c => c.id === parentId);
+        if (parentId === id || !parent || parent.parent_id !== null) throw new Error('Choose another top-level parent category');
+        if (this.categories().some(c => c.parent_id === id)) throw new Error('Move this category’s subcategories first, then change its parent. Only one subcategory level is supported.');
+        const plans = this.db.getAllSync<{ month: string }>('SELECT month FROM budget_plans WHERE category_id = ? ORDER BY month', id);
+        if (plans.length) throw new Error('This category has budget allocations in ' + plans.map(p => p.month).join(', ') + '. Clear its allocation in those months before moving it under another category.');
+      }
+      this.db.runSync('UPDATE categories SET name = ?, parent_id = ? WHERE id = ?', named(name), parentId, id);
+    });
+  }
+  budgetPlans(month: string): { categoryId: number; amount: number }[] {
+    validBudgetMonth(month);
+    return this.db.getAllSync<{ categoryId: number; amount: number }>('SELECT category_id AS categoryId, amount FROM budget_plans WHERE month = ? ORDER BY category_id', month);
+  }
+  budgetMonths(): string[] {
+    return this.db.getAllSync<{ month: string }>('SELECT DISTINCT month FROM budget_plans ORDER BY month DESC').map(row => row.month);
+  }
+  saveBudget(month: string, plans: { categoryId: number; amount: number }[]): void {
+    validBudgetMonth(month);
+    atomic(this.db, () => {
+      const roots = new Set(this.categories().filter(c => c.parent_id === null).map(c => c.id));
+      const seen = new Set<number>();
+      let total = 0;
+      for (const plan of plans) {
+        if (!roots.has(plan.categoryId) || seen.has(plan.categoryId)) throw new Error('Choose each top-level category only once');
+        seen.add(plan.categoryId);
+        if (money(plan.amount) < 0) throw new Error('Budget amounts cannot be negative');
+        total = addMoney(total, plan.amount);
+      }
+      this.db.runSync('DELETE FROM budget_plans WHERE month = ?', month);
+      for (const plan of plans) this.db.runSync('INSERT INTO budget_plans(month, category_id, amount) VALUES (?, ?, ?)', month, plan.categoryId, plan.amount);
+    });
+  }
+  copyBudget(source: string, destination: string): void {
+    validBudgetMonth(source); validBudgetMonth(destination);
+    if (source >= destination) throw new Error('Choose a past month to copy');
+    const plans = this.budgetPlans(source);
+    if (!plans.length) throw new Error('That month has no saved plan');
+    // saveBudget replaces allocations atomically; transactions are never copied.
+    this.saveBudget(destination, plans);
   }
   createIncomeSource(name: string): number {
     return this.db.runSync('INSERT INTO income_sources(name) VALUES (?)', named(name)).lastInsertRowId;
@@ -219,6 +266,7 @@ export class BudgetRepository {
       for (const category of categories) if (category.parent_id !== null && categories.find(p => p.id === category.parent_id)?.parent_id !== null) throw new Error('Backup contains nested subcategories');
       for (const plan of backup.tables.budget_plans) if (categories.find(c => c.id === plan.category_id)?.parent_id !== null) throw new Error('Budget plans must use top-level categories');
       this.validateBalances();
+      for (const month of this.budgetMonths()) this.budgetPlans(month).reduce((total, row) => addMoney(total, row.amount), 0);
       for (const { month } of this.db.getAllSync<{ month: string }>("SELECT DISTINCT substr(date,1,7) AS month FROM transactions")) this.spending(month).reduce((total, row) => addMoney(total, row.spent), 0);
     });
   }

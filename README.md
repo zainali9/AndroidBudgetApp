@@ -4,7 +4,7 @@ The cross-platform app lives on `main`. The earlier Kotlin prototype is preserve
 
 ## Current checkpoint
 
-A five-tab TypeScript budget app with local SQLite records, account/category setup, income and expense entry, transfers, an expense pie chart, and light/dark appearance. Screens now show saved records. Monthly budget limits and copying plans are the next milestone. Android is the first implementation/test target; iOS validation comes after the Android application is complete.
+A five-tab TypeScript budget app with local SQLite records, account/category setup, income and expense entry, transfers, an expense pie chart, and light/dark appearance. Screens now show saved records. Monthly budget limits, copying past plans into drafts, and category name/parent editing are implemented. Android is the first implementation/test target; iOS validation comes after the Android application is complete.
 
 The application identifier is `com.zaina.budgetapp`, so this app can coexist with the Kotlin prototype (`com.example.mybudgetapp`).
 
@@ -25,14 +25,14 @@ Expected APK: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 Unlock the phone and authorize USB debugging. Run `npm.cmd run android` to build/install and start development. Alternatively install the APK with Android's `adb install -r`, use `adb reverse tcp:8081 tcp:8081` for the USB connection to Metro, and run `npm.cmd start`.
 
-This first APK is a development build, which uses Metro on your computer to load the JavaScript. A later standalone build will bundle the code for independent offline use. Metro is a development server, not a backend for financial records. No Expo account or EAS cloud build is required for this local Android workflow.
+This first APK is a development build, which uses Metro on your computer to load the JavaScript. The standalone build (`npm.cmd run build:standalone`) bundles the code for independent offline use. Metro is a development server, not a backend for financial records. No Expo account or EAS cloud build is required for this local Android workflow.
 
 ## Learn the files
 
 | File | Purpose |
 | --- | --- |
 | `index.ts` | Registers the root React component with Expo. |
-| `App.tsx` | Shared state, tab navigation, theme providers, and expense preview modal. |
+| `App.tsx` | Shared state, tab navigation, theme providers, and entry/planning modals. |
 | `app.json` | App name, identifiers, appearance, icons, and native configuration. |
 | `package.json` | Dependencies and development commands. |
 | `package-lock.json` | Reproducible dependency versions. |
@@ -47,8 +47,8 @@ This first APK is a development build, which uses Metro on your computer to load
 2. Five-tab design preview implemented; see Lesson 2.
 3. SQLite schema, startup initialization, repository and tested financial rules implemented. Native database creation and reopening verified on OnePlus 8T.
 4. Account/card, category, income-source and transaction creation implemented. Transfers and credit-card repayments avoid double counting. Transactions support editing and deletion with confirmation.
-5. Add monthly budgets, copying past plans, and a dashboard driven by stored records.
-6. Add manual backup/restore, migration tests, and standalone Android release checks.
+5. Monthly budgets, copying past plans into drafts, category editing, and compact budget progress implemented; see Lesson 6.
+6. Manual backup/restore, migration tests, and personal standalone Android builds implemented; see Lesson 5.
 7. Test and adapt on iOS only after Android is complete.
 
 A Mac and Xcode are needed for local iOS native builds; optional cloud builds are an alternative. iOS compilation, signing, and device behavior remain unverified.
@@ -76,3 +76,5 @@ Read [Lesson 3: local storage and financial rules](docs/03-local-storage-and-fin
 Read [Lesson 4: forms and saved records](docs/04-forms-and-saved-records.md) for first-use steps and how drafts become saved transactions.
 
 Read [Lesson 5: daily use, corrections and backups](docs/05-daily-use-corrections-and-backups.md) for standalone builds, transaction corrections, and backup/restore. Run `npm.cmd run build:standalone` for the personal Android APK with bundled code.
+
+Read [Lesson 6: monthly budgets and category editing](docs/06-monthly-budgets-and-category-editing.md) for monthly planning, copying drafts, category relationships, and how derived remaining amounts work.
