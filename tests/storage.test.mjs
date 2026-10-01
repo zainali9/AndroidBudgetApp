@@ -1,3 +1,4 @@
+import { filterTransactions, emptyTransactionFilters } from '../src/data/transactionFilters.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -438,4 +439,74 @@ test('setup edits survive database reopen and a backup roundtrip', t => {
     assert.deepEqual(JSON.parse(second.repo.exportBackup()).tables, expected);
     assert.equal(second.repo.balance(account), -12345);
   } finally { second.sqlite.close(); }
+});
+
+function transactionFilterFixture(t) {
+  const { repo } = setup(t);
+  const bank = repo.createAccount('Everyday', 'bank', 100000);
+  const credit = repo.createAccount('Everyday', 'credit', 0);
+  const food = repo.createCategory('Food');
+  const groceries = repo.createCategory('Groceries', food);
+  const travel = repo.createCategory('Travel');
+  const source = repo.createIncomeSource('Salary');
+  const card = repo.createDebitCard('Daily debit', bank);
+  const common = { date: '2026-10-01', accountId: bank, amount: 100 };
+  const direct = repo.record({ ...common, kind: 'expense', categoryId: food, note: 'Lunch sale 50% off', cardId: card });
+  const child = repo.record({ ...common, kind: 'expense', categoryId: groceries, note: 'Weekly دودھ خریداری' });
+  const other = repo.record({ ...common, kind: 'expense', accountId: credit, categoryId: travel, note: "Driver's fare" });
+  const income = repo.record({ ...common, kind: 'income', sourceId: source });
+  const transfer = repo.record({ ...common, kind: 'transfer', destinationId: credit });
+  repo.record({ ...common, date: '2026-09-30', kind: 'expense', categoryId: food, note: 'Previous month' });
+  const rows = repo.transactions('2026-10');
+  const find = filters => filterTransactions(rows, { ...emptyTransactionFilters, ...filters }).map(row => row.id).sort((a, b) => a - b);
+  return { repo, rows, find, bank, credit, food, groceries, travel, direct, child, other, income, transfer };
+}
+
+test('account filters use IDs and include both sides of transfers within the selected month', t => {
+  const f = transactionFilterFixture(t);
+  assert.deepEqual(f.find({ accountId: f.bank }), [f.direct, f.child, f.income, f.transfer]);
+  assert.deepEqual(f.find({ accountId: f.credit }), [f.other, f.transfer]);
+  assert.deepEqual(f.find({ kind: 'transfer', accountId: f.credit }), [f.transfer]);
+  assert.deepEqual(f.find({ kind: 'income', accountId: f.credit }), []);
+  assert.deepEqual(f.find({}), [f.direct, f.child, f.other, f.income, f.transfer]);
+  assert.equal(f.rows.find(row => row.id === f.transfer).destinationId, f.credit);
+});
+
+test('parent category filters include direct and child expenses and combine with other filters', t => {
+  const f = transactionFilterFixture(t);
+  assert.deepEqual(f.find({ categoryId: f.food }), [f.direct, f.child]);
+  assert.deepEqual(f.find({ categoryId: f.groceries }), [f.child]);
+  assert.deepEqual(f.find({ kind: 'expense', accountId: f.credit, categoryId: f.food }), []);
+  assert.deepEqual(f.find({ categoryId: f.food, query: 'weekly' }), [f.child]);
+  assert.equal(f.rows.find(row => row.id === f.child).categoryParentId, f.food);
+  assert.equal(f.rows.find(row => row.id === f.income).categoryId, null);
+});
+
+test('search handles case, multiple terms, Urdu, normalized text, dates, and literal punctuation', t => {
+  const f = transactionFilterFixture(t);
+  assert.deepEqual(f.find({ query: '  DAILY   lunch  ' }), [f.direct]);
+  assert.deepEqual(f.find({ query: 'دودھ' }), [f.child]);
+  assert.deepEqual(f.find({ query: 'ＳＡＬＡＲＹ' }), [f.income]);
+  assert.deepEqual(f.find({ query: '2026-10-01', kind: 'income' }), [f.income]);
+  assert.deepEqual(f.find({ query: '50%' }), [f.direct]);
+  assert.deepEqual(f.find({ query: "driver's" }), [f.other]);
+  assert.deepEqual(f.find({ query: '[' }), []);
+  assert.deepEqual(f.find({ query: '   ' }), f.find({}));
+  assert.deepEqual(f.find({ query: 'previous month' }), []);
+});
+
+test('filters preserve order and records and follow renamed or regrouped categories', t => {
+  const f = transactionFilterFixture(t);
+  const before = JSON.parse(f.repo.exportBackup()).tables;
+  const rows = f.rows.map(row => Object.freeze({ ...row }));
+  Object.freeze(rows);
+  const result = filterTransactions(rows, Object.freeze({ ...emptyTransactionFilters, kind: 'expense' }));
+  assert.deepEqual(result.map(row => row.id), [f.other, f.child, f.direct]);
+  assert.deepEqual(JSON.parse(f.repo.exportBackup()).tables, before);
+  f.repo.updateAccount(f.bank, 'Renamed bank', f.repo.account(f.bank).opening);
+  f.repo.updateCategory(f.groceries, 'Milk', f.travel);
+  const updated = f.repo.transactions('2026-10');
+  assert.deepEqual(filterTransactions(updated, { ...emptyTransactionFilters, accountId: f.bank, categoryId: f.travel }).map(row => row.id), [f.child]);
+  assert.deepEqual(filterTransactions(updated, { ...emptyTransactionFilters, query: 'milk renamed' }).map(row => row.id), [f.child]);
+  assert.deepEqual(filterTransactions(updated, { ...emptyTransactionFilters, categoryId: f.food }).map(row => row.id), [f.direct]);
 });

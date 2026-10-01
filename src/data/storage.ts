@@ -96,7 +96,7 @@ type Row = { kind: Entry['kind']; amount: number; account_id: number; destinatio
 export type Category = { id: number; name: string; parent_id: number | null };
 export type DebitCard = { id: number; name: string; account_id: number };
 export type IncomeSource = { id: number; name: string };
-export type SavedTransaction = { id: number; kind: Entry['kind']; amount: number; date: string; note: string; account: string; destination: string | null; category: string | null; source: string | null; card: string | null };
+export type SavedTransaction = { accountId: number; destinationId: number | null; categoryId: number | null; categoryParentId: number | null; id: number; kind: Entry['kind']; amount: number; date: string; note: string; account: string; destination: string | null; category: string | null; source: string | null; card: string | null };
 export function monthKey(month: number): string {
   if (!Number.isInteger(month) || month < 1900 * 12 || month > 9999 * 12 + 11) throw new Error('Choose a month between 1900 and 9999');
   return `${Math.floor(month / 12)}-${String(month % 12 + 1).padStart(2, '0')}`;
@@ -117,6 +117,7 @@ export class BudgetRepository {
   transactions(month: string): SavedTransaction[] {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Invalid month');
     return this.db.getAllSync<SavedTransaction>(`SELECT t.id, t.kind, t.amount, t.date, t.note, a.name AS account,
+      t.account_id AS accountId, t.destination_id AS destinationId, t.category_id AS categoryId, c.parent_id AS categoryParentId,
       d.name AS destination, CASE WHEN p.id IS NULL THEN c.name ELSE p.name || ' / ' || c.name END AS category,
       s.name AS source, card.name AS card
       FROM transactions t JOIN accounts a ON a.id = t.account_id

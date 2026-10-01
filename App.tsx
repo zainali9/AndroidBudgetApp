@@ -59,7 +59,7 @@ function BudgetApp() {
   return <SafeAreaView style={[s.root, { backgroundColor: theme.background }]}>
     <View style={s.header}><Label style={{ fontSize: 23, lineHeight: 30, fontWeight: '700' }}>My Budget</Label><Label muted>{tab}</Label></View>
     <View style={s.body}>
-      <ScrollView key={tab} contentContainerStyle={s.content}>
+      <ScrollView key={tab} keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>
         <View style={[s.notice, { backgroundColor: theme.tint }]}><Label style={{ fontSize: 11, fontWeight: '600', letterSpacing: 0.5 }}>ON THIS DEVICE · PKR</Label></View>
         {['Home', 'Transactions', 'Budgets'].includes(tab) && <MonthSelector month={month} onChange={changeMonth} />}
         {data ? <BudgetScreens onEditSetup={setSetupEditing} onPlan={() => setPlanning(true)} onEditCategory={setCategoryEditing} tab={tab} data={data} onAdd={openForm} onChanged={() => setRevision(value => value + 1)} onEdit={id => { const entry = repo.entry(id); setEditing({ id, entry }); setForm(entry.kind); }} /> : <><Label>Could not load your records. Your data has not been reset.</Label><Action onPress={() => setRevision(value => value + 1)}>Try again</Action></>}
