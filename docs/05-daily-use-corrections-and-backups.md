@@ -95,3 +95,11 @@ References: [Expo FileSystem](https://docs.expo.dev/versions/latest/sdk/filesyst
 - Signing certificate SHA-256: `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c` (preserved local development key).
 - The phone was disconnected. Installed-certificate comparison, in-place installation, native backup picker flows and offline cold launch are still pending. No phone records were read, replaced or cleared during this milestone.
 - iOS remains untested. This is a personal sideload build, not a Play Store production release.
+
+### Standalone device follow-up — 2026-10-01
+
+- The installed APK and standalone APK signing certificates matched. A stopped-app database snapshot was preserved in ignored local build output before the update; its integrity check passed.
+- Version 1.1.0 / code 2 installed successfully as an update. The app reached Home on two cold starts with no ADB reverse forwarding to Metro.
+- Android backup export succeeded to `Documents/MyBudgetBackups`. The exported data matched the pre-update snapshot exactly for all six tables: 3 accounts, 1 debit card, 8 categories, 3 income sources, no transactions, and no budget plans.
+- Restore successfully opened the exported file and displayed the correct account/transaction counts and replacement confirmation. The test was cancelled; no restore replacement was performed on the user's database. Atomic replacement/rollback remains covered by the SQLite tests.
+- The app was left on Home. The user can now disconnect the phone from the PC and use the bundled standalone app. Current data was preserved; local snapshots and exported financial data are not committed.
