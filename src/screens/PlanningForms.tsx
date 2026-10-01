@@ -1,28 +1,12 @@
-import { PropsWithChildren, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRef, useState } from 'react';
+import { Alert, View } from 'react-native';
+import { FormSheet } from '../components/FormSheet';
 import { useRepository } from '../data/DatabaseProvider';
 import { Category, parsePkr } from '../data/storage';
 import { monthLabel } from '../sampleData';
-import { useTheme } from '../theme';
-import { Heading, Label } from '../components/Common';
+import { Label } from '../components/Common';
 import { Action, Choice, Field } from '../components/FormControls';
 
-function Sheet({ title, dirty, onClose, children }: PropsWithChildren<{ title: string; dirty: boolean; onClose: () => void }>) {
-  const theme = useTheme();
-  const cancel = () => dirty ? Alert.alert('Discard changes?', 'Your unsaved changes will be lost.', [
-    { text: 'Keep editing', style: 'cancel' }, { text: 'Discard', style: 'destructive', onPress: onClose },
-  ]) : onClose();
-  return <Modal animationType="slide" onRequestClose={cancel}>
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 18 }}>
-          <Heading>{title}</Heading>{children}<Action onPress={cancel}>Cancel</Action>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  </Modal>;
-}
 const rupees = (amount: number) => `${Math.floor(amount / 100)}.${String(amount % 100).padStart(2, '0')}`;
 const friendlyMonth = (key: string) => { const [year, month] = key.split('-').map(Number); return monthLabel(year * 12 + month - 1); };
 const message = (error: unknown) => error instanceof Error && !/sqlite|constraint/i.test(error.message) ? error.message : 'Could not save. Your existing records were kept.';
@@ -54,7 +38,7 @@ export function BudgetForm({ month, onClose, onSaved }: { month: string; onClose
       repo.saveBudget(month, plans); onSaved();
     } catch (err) { setError(message(err)); saving.current = false; }
   };
-  return <Sheet title={`Plan for ${friendlyMonth(month)}`} dirty={dirty} onClose={onClose}>
+  return <FormSheet title={`Plan for ${friendlyMonth(month)}`} dirty={dirty} onClose={onClose}>
     <Label muted>Set limits for top-level categories. Each limit includes its subcategories. Leave a field blank for no budget; enter 0 for an explicit zero limit.</Label>
     {!!pastMonths.length && <View style={{ gap: 10 }}>
       <Choice label="Copy from a past month" value={source} options={pastMonths.map(key => ({ value: key, label: friendlyMonth(key) }))} onChange={setSource} />
@@ -65,7 +49,7 @@ export function BudgetForm({ month, onClose, onSaved }: { month: string; onClose
       : <Label>Add a top-level category in Settings before planning.</Label>}
     {!!error && <Label>{error}</Label>}
     <Action disabled={!roots.length} onPress={save}>Save plan</Action>
-  </Sheet>;
+  </FormSheet>;
 }
 
 export function CategoryForm({ category, onClose, onSaved }: { category: Category; onClose: () => void; onSaved: () => void }) {
@@ -84,7 +68,7 @@ export function CategoryForm({ category, onClose, onSaved }: { category: Categor
   const confirm = () => parentChanged ? Alert.alert('Change category grouping?', 'Existing expenses will be grouped under the new parent (or this category if top-level), including past months. Existing budget amounts will stay with their current categories. Transaction amounts and account balances stay the same.', [
     { text: 'Cancel', style: 'cancel' }, { text: 'Save change', onPress: save },
   ]) : save();
-  return <Sheet title="Edit category" dirty={name !== category.name || parentChanged} onClose={onClose}>
+  return <FormSheet title="Edit category" dirty={name !== category.name || parentChanged} onClose={onClose}>
     <Field label="Category name" value={name} onChange={setName} />
     <Choice label="Parent category" value={parent} onChange={setParent} options={[
       { value: '', label: 'None (top-level)' },
@@ -93,5 +77,5 @@ export function CategoryForm({ category, onClose, onSaved }: { category: Categor
     <Label muted>Renaming keeps all linked expenses. Before moving a top-level category, move its subcategories and clear its saved monthly budget allocations.</Label>
     {!!error && <Label>{error}</Label>}
     <Action onPress={confirm}>Save category</Action>
-  </Sheet>;
+  </FormSheet>;
 }

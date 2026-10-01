@@ -4,7 +4,7 @@ The cross-platform app lives on `main`. The earlier Kotlin prototype is preserve
 
 ## Current checkpoint
 
-A five-tab TypeScript budget app with local SQLite records, account/category setup, income and expense entry, transfers, an expense pie chart, and light/dark appearance. Screens now show saved records. Monthly budget limits, copying past plans into drafts, and category name/parent editing are implemented. Android is the first implementation/test target; iOS validation comes after the Android application is complete.
+A five-tab TypeScript budget app with local SQLite records, account/category setup, income and expense entry, transfers, an expense pie chart, and light/dark appearance. Screens now show saved records. Monthly budget limits, copying past plans into drafts, and category name/parent editing are implemented. Accounts support name/opening-balance corrections; debit cards and income sources can be renamed. Android is the first implementation/test target; iOS validation comes after the Android application is complete.
 
 The application identifier is `com.zaina.budgetapp`, so this app can coexist with the Kotlin prototype (`com.example.mybudgetapp`).
 
@@ -49,7 +49,9 @@ This first APK is a development build, which uses Metro on your computer to load
 4. Account/card, category, income-source and transaction creation implemented. Transfers and credit-card repayments avoid double counting. Transactions support editing and deletion with confirmation.
 5. Monthly budgets, copying past plans into drafts, category editing, and compact budget progress implemented; see Lesson 6.
 6. Manual backup/restore, migration tests, and personal standalone Android builds implemented; see Lesson 5.
-7. Test and adapt on iOS only after Android is complete.
+7. Setup-record corrections implemented in a separate milestone; see Lesson 7.
+8. Combined Android device verification for budgets, category edits, and setup corrections is pending; see the test checklist.
+9. Test and adapt on iOS only after Android is complete.
 
 A Mac and Xcode are needed for local iOS native builds; optional cloud builds are an alternative. iOS compilation, signing, and device behavior remain unverified.
 
@@ -78,3 +80,5 @@ Read [Lesson 4: forms and saved records](docs/04-forms-and-saved-records.md) for
 Read [Lesson 5: daily use, corrections and backups](docs/05-daily-use-corrections-and-backups.md) for standalone builds, transaction corrections, and backup/restore. Run `npm.cmd run build:standalone` for the personal Android APK with bundled code.
 
 Read [Lesson 6: monthly budgets and category editing](docs/06-monthly-budgets-and-category-editing.md) for monthly planning, copying drafts, category relationships, and how derived remaining amounts work.
+
+Read [Lesson 7: setup-record corrections](docs/07-setup-record-corrections.md) for account balance previews, safe updates, and reusable form components. Use the [combined Android test checklist](docs/08-combined-android-test-checklist.md) to verify both new milestones in one phone session.

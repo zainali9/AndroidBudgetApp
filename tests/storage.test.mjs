@@ -338,3 +338,104 @@ test('restore rejects a budget total overflow without replacing existing records
   assert.throws(() => repo.restoreBackup(JSON.stringify(backup)));
   assert.deepEqual(JSON.parse(repo.exportBackup()).tables, before);
 });
+
+test('setup renames retain links and opening corrections do not change expenses or plans', t => {
+  const { repo } = setup(t);
+  const bank = repo.createAccount('Bank', 'bank', 1000000);
+  const credit = repo.createAccount('Credit', 'credit', -50000);
+  const card = repo.createDebitCard('Debit', bank);
+  const source = repo.createIncomeSource('Work');
+  const category = repo.createCategory('Food');
+  const expense = repo.record({ kind: 'expense', amount: 200000, date, accountId: bank, categoryId: category, cardId: card });
+  const income = repo.record({ kind: 'income', amount: 10000, date, accountId: bank, sourceId: source });
+  const transfer = repo.record({ kind: 'transfer', amount: 5000, date, accountId: bank, destinationId: credit });
+  repo.saveBudget('2026-09', [{ categoryId: category, amount: 250000 }]);
+  const entries = [expense, income, transfer].map(id => repo.entry(id));
+  const spending = repo.spending('2026-09');
+  const plans = repo.budgetPlans('2026-09');
+  const oldBalance = repo.balance(bank);
+  assert.equal(repo.previewOpeningBalance(bank, 1200000), oldBalance + 200000);
+  assert.equal(repo.balance(bank), oldBalance, 'preview must not save');
+  repo.updateAccount(bank, ' Main bank ', 1200000);
+  repo.updateAccount(credit, 'Card account', -60000);
+  repo.renameDebitCard(card, ' Daily debit ');
+  repo.renameIncomeSource(source, ' Salary ');
+  assert.deepEqual(repo.account(bank), { id: bank, name: 'Main bank', kind: 'bank', opening: 1200000 });
+  assert.equal(repo.balance(bank), oldBalance + 200000);
+  assert.equal(repo.balance(credit), -55000);
+  assert.deepEqual([expense, income, transfer].map(id => repo.entry(id)), entries);
+  assert.deepEqual(repo.spending('2026-09'), spending);
+  assert.deepEqual(repo.budgetPlans('2026-09'), plans);
+  const rows = repo.transactions('2026-09');
+  assert.equal(rows.find(row => row.id === expense).account, 'Main bank');
+  assert.equal(rows.find(row => row.id === expense).card, 'Daily debit');
+  assert.equal(rows.find(row => row.id === income).source, 'Salary');
+  assert.equal(rows.find(row => row.id === transfer).destination, 'Card account');
+  assert.deepEqual(repo.debitCards(), [{ id: card, name: 'Daily debit', account_id: bank }]);
+});
+
+test('unsafe setup corrections roll back names and balances together', t => {
+  const { repo } = setup(t);
+  const bank = repo.createAccount('Bank', 'bank', 0);
+  const category = repo.createCategory('Food');
+  const source = repo.createIncomeSource('Work');
+  const card = repo.createDebitCard('Debit', bank);
+  repo.record({ kind: 'income', amount: 1, date, accountId: bank, sourceId: source });
+  const before = JSON.parse(repo.exportBackup()).tables;
+  for (const opening of [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER + 1, 0.5, NaN, Infinity]) {
+    assert.throws(() => repo.previewOpeningBalance(bank, opening));
+    assert.throws(() => repo.updateAccount(bank, 'Should roll back', opening));
+    assert.deepEqual(JSON.parse(repo.exportBackup()).tables, before);
+  }
+  for (const name of ['', '   ', 'x'.repeat(101)]) {
+    assert.throws(() => repo.updateAccount(bank, name, 0));
+    assert.throws(() => repo.renameDebitCard(card, name));
+    assert.throws(() => repo.renameIncomeSource(source, name));
+  }
+  assert.throws(() => repo.updateAccount(999, 'Missing', 0));
+  assert.throws(() => repo.renameDebitCard(999, 'Missing'));
+  assert.throws(() => repo.renameIncomeSource(999, 'Missing'));
+  assert.deepEqual(JSON.parse(repo.exportBackup()).tables, before);
+  repo.record({ kind: 'expense', amount: 2, date, accountId: bank, categoryId: category });
+  const negativeBefore = JSON.parse(repo.exportBackup()).tables;
+  assert.throws(() => repo.updateAccount(bank, 'Too negative', -Number.MAX_SAFE_INTEGER));
+  assert.deepEqual(JSON.parse(repo.exportBackup()).tables, negativeBefore);
+});
+
+test('opening preview handles large signed corrections exactly and zero credit balances', t => {
+  const { repo } = setup(t);
+  const credit = repo.createAccount('Credit', 'credit', -Number.MAX_SAFE_INTEGER);
+  assert.equal(repo.previewOpeningBalance(credit, Number.MAX_SAFE_INTEGER), Number.MAX_SAFE_INTEGER);
+  assert.equal(repo.account(credit).opening, -Number.MAX_SAFE_INTEGER);
+  repo.updateAccount(credit, 'Credit', Number.MAX_SAFE_INTEGER);
+  assert.equal(repo.balance(credit), Number.MAX_SAFE_INTEGER);
+  repo.updateAccount(credit, 'Credit', 0);
+  assert.equal(repo.balance(credit), 0);
+  assert.equal(repo.account(credit).kind, 'credit');
+});
+
+test('setup edits survive database reopen and a backup roundtrip', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'budget-setup-edits-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, 'setup.db');
+  const first = open(path);
+  migrate(first.db);
+  const account = first.repo.createAccount('Before', 'bank', 0);
+  const card = first.repo.createDebitCard('Before', account);
+  const source = first.repo.createIncomeSource('Before');
+  first.repo.updateAccount(account, 'Bank after', -12345);
+  first.repo.renameDebitCard(card, 'Card after');
+  first.repo.renameIncomeSource(source, 'Source after');
+  const expected = JSON.parse(first.repo.exportBackup()).tables;
+  first.sqlite.close();
+  const second = open(path);
+  try {
+    migrate(second.db);
+    assert.deepEqual(JSON.parse(second.repo.exportBackup()).tables, expected);
+    const backup = second.repo.exportBackup();
+    second.repo.updateAccount(account, 'Temporary', 100);
+    second.repo.restoreBackup(backup);
+    assert.deepEqual(JSON.parse(second.repo.exportBackup()).tables, expected);
+    assert.equal(second.repo.balance(account), -12345);
+  } finally { second.sqlite.close(); }
+});

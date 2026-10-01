@@ -130,6 +130,28 @@ export class BudgetRepository {
   createAccount(name: string, kind: AccountKind, opening = 0): number {
     return this.db.runSync('INSERT INTO accounts(name, kind, opening) VALUES (?, ?, ?)', named(name), kind, money(opening)).lastInsertRowId;
   }
+  previewOpeningBalance(id: number, opening: number): number {
+    money(opening);
+    const value = BigInt(this.balance(id)) - BigInt(this.account(id).opening) + BigInt(opening);
+    if (value < -BigInt(MAX) || value > BigInt(MAX)) throw new Error('The corrected current balance would be too large');
+    return Number(value);
+  }
+  updateAccount(id: number, name: string, opening: number): void {
+    atomic(this.db, () => {
+      this.account(id);
+      this.db.runSync('UPDATE accounts SET name = ?, opening = ? WHERE id = ?', named(name), money(opening), id);
+      // The correction must leave the derived current balance representable.
+      this.balance(id);
+    });
+  }
+  renameDebitCard(id: number, name: string): void {
+    const result = this.db.runSync('UPDATE cards SET name = ? WHERE id = ?', named(name), id);
+    if (!result.changes) throw new Error('Debit card no longer exists');
+  }
+  renameIncomeSource(id: number, name: string): void {
+    const result = this.db.runSync('UPDATE income_sources SET name = ? WHERE id = ?', named(name), id);
+    if (!result.changes) throw new Error('Income source no longer exists');
+  }
   createDebitCard(name: string, accountId: number): number {
     if (this.account(accountId).kind !== 'bank') throw new Error('A debit card must link to a bank account');
     return this.db.runSync('INSERT INTO cards(name, account_id) VALUES (?, ?)', named(name), accountId).lastInsertRowId;

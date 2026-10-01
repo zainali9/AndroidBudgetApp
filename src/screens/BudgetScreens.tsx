@@ -8,13 +8,14 @@ import { BudgetProgress } from '../components/BudgetProgress';
 import { BackupControls } from '../components/BackupControls';
 import { useRepository } from '../data/DatabaseProvider';
 import { ExpensePieChart } from '../components/ExpensePieChart';
+import { SetupTarget } from './SetupForm';
 import { FormKind } from './EntryForm';
 
 export type ScreenData = {
   accounts: (Account & { balance: number })[]; categories: Category[]; cards: DebitCard[];
   sources: IncomeSource[]; transactions: SavedTransaction[]; spending: Budget[]; plans: Budget[];
 };
-export function BudgetScreens({ tab, data, onAdd, onEdit, onChanged, onPlan, onEditCategory }: { onPlan: () => void; onEditCategory: (category: Category) => void; tab: Tab; data: ScreenData; onAdd: (kind: FormKind) => void; onEdit: (id: number) => void; onChanged: () => void }) {
+export function BudgetScreens({ tab, data, onAdd, onEdit, onChanged, onPlan, onEditCategory, onEditSetup }: { onEditSetup: (target: SetupTarget) => void; onPlan: () => void; onEditCategory: (category: Category) => void; tab: Tab; data: ScreenData; onAdd: (kind: FormKind) => void; onEdit: (id: number) => void; onChanged: () => void }) {
   const theme = useTheme();
   const repo = useRepository();
   const remove = (id: number) => Alert.alert('Delete this transaction?', 'Its effect on balances and spending will be reversed. This cannot be undone without a backup.', [
@@ -50,7 +51,8 @@ export function BudgetScreens({ tab, data, onAdd, onEdit, onChanged, onPlan, onE
       <Label muted>{account.kind === 'credit' ? (account.balance < 0 ? 'Amount owed' : 'Credit in your favor') : account.balance < 0 ? 'Negative balance' : 'Available balance'}</Label>
       <Label style={{ fontSize: 23, lineHeight: 29, fontWeight: '600' }}>{pkr(account.kind === 'credit' ? Math.abs(account.balance) : account.balance)}</Label>
       <Label muted>{account.kind === 'credit' ? 'Credit card' : account.kind === 'bank' ? 'Bank account' : 'Cash'} · Current balance across all dates</Label>
-      {data.cards.filter(card => card.account_id === account.id).map(card => <Label muted key={card.id}>Debit card · {card.name}</Label>)}
+      <Action onPress={() => onEditSetup({ kind: 'account', record: account })}>Edit account</Action>
+      {data.cards.filter(card => card.account_id === account.id).map(card => <View key={card.id} style={{ gap: 5 }}><Label muted>Debit card · {card.name}</Label><Action onPress={() => onEditSetup({ kind: 'card', record: card })}>Edit {card.name}</Action></View>)}
     </Card>) : <EmptyState title="No accounts yet" detail="Add an account and its opening balance to get started." />}
   </>;
   return <><Heading>Make it yours</Heading>
@@ -58,7 +60,7 @@ export function BudgetScreens({ tab, data, onAdd, onEdit, onChanged, onPlan, onE
     <Heading>Expense categories</Heading><Action onPress={() => onAdd('category')}>Add category</Action>
     {data.categories.length ? data.categories.map(category => <View key={category.id}><InfoRow title={category.name} detail={category.parent_id ? `Under ${data.categories.find(p => p.id === category.parent_id)?.name}` : 'Top-level category'} /><Action onPress={() => onEditCategory(category)}>Edit {category.name}</Action></View>) : <Label muted>No categories yet. Add one before recording expenses.</Label>}
     <Heading>Income sources</Heading><Action onPress={() => onAdd('source')}>Add income source</Action>
-    {data.sources.map(source => <InfoRow key={source.id} title={source.name} detail="Income source" />)}
+    {data.sources.map(source => <View key={source.id}><InfoRow title={source.name} detail="Income source" /><Action onPress={() => onEditSetup({ kind: 'source', record: source })}>Edit {source.name}</Action></View>)}
     <BackupControls onChanged={onChanged} />
     <InfoRow title="Appearance" detail="Follows your phone's light or dark theme" />
   </>;
