@@ -1,6 +1,6 @@
 # Combined Android test: budgets, categories, and setup corrections
 
-Status: **Pending on the OnePlus 8T.** This is a checklist, not a claim that device tests have passed.
+Status: **Version 1.3.0 installed on the OnePlus 8T; smoke and unchanged-value save checks passed on 2026-10-01.** The pre/post-update exports match exactly. Unchecked scenarios below remain pending, particularly synthetic financial mutations and visual checks. See Lesson 7 for the detailed results.
 
 ## Versions and commits
 
@@ -10,17 +10,17 @@ Status: **Pending on the OnePlus 8T.** This is a checklist, not a claim that dev
 
 ## Protect the daily-use app
 
-- [ ] Export a current backup before upgrading, since new records may have been entered after the last backup.
-- [ ] Check the new APK's package ID and signing certificate against the installed app.
-- [ ] Update in place using the same package/signing key. Do not uninstall or clear storage.
-- [ ] Cold-launch the app without Metro forwarding and confirm the existing records and balances are present.
+- [x] Export a current backup before upgrading, since new records may have been entered after the last backup.
+- [x] Check the new APK's package ID and signing certificate against the installed app.
+- [x] Update in place using the same package/signing key. Do not uninstall or clear storage.
+- [x] Cold-launch the app without Metro forwarding and confirm the existing records and balances are present.
 
 Use the real app for read-only checks and intended corrections. Run synthetic save/delete/restore cases in an isolated test installation/database so test expenses do not enter the daily-use ledger. Do not replace the real database with fixture data. If an isolated test installation is unavailable, leave those mutation cases pending until the owner chooses real values to save.
 
 ## Budget and category checks
 
 - [ ] Open Home: pie chart immediately below the heading; budget rows remain compact and scrollable.
-- [ ] Open Budgets and check selected month, editor values, keyboard scrolling, and Save/Cancel accessibility.
+- [x] Open Budgets and check selected month, editor values, keyboard scrolling, and Save/Cancel accessibility.
 - [ ] In isolated data, save positive and zero limits while leaving one category blank; reopen and confirm all three states.
 - [ ] Record an expense in a child category; confirm its parent budget decreases by the exact PKR amount.
 - [ ] Check an overspent category: full bar, red over-budget amount; an unassigned category appears separately.
@@ -36,7 +36,7 @@ Use the real app for read-only checks and intended corrections. Run synthetic sa
 - [ ] Open each account type's editor: bank, cash, credit card; verify existing name, opening amount, and sign.
 - [ ] Confirm the displayed current balance agrees with Accounts before any edits.
 - [ ] In isolated data, correct a starting balance and verify the preview, confirmation, and resulting saved balance agree.
-- [ ] Cancel the opening-correction confirmation; verify the saved account is unchanged and the draft remains editable.
+- [x] Cancel the opening-correction confirmation; verify the saved account is unchanged and the draft remains editable.
 - [ ] Check credit debt, credit in your favor, zero, and a bank overdraft; confirm labels and signs are clear.
 - [ ] Rename an account used by expenses, income, and transfers; transaction labels should refresh while IDs/amounts remain unchanged.
 - [ ] Rename a used debit card and income source; verify transaction labels and future-entry choices refresh.
@@ -51,6 +51,6 @@ Use the real app for read-only checks and intended corrections. Run synthetic sa
 - [ ] Reopen the app and confirm edited setup records and plans persist.
 - [ ] Export a fresh backup with both kinds of changes. On isolated data, restore and compare records/plans/balances.
 - [ ] Check light/dark appearance, long names, keyboard visibility, larger system text, and Android Back behavior.
-- [ ] Leave the daily-use app on Home with the owner's intended data and a fresh backup.
+- [x] Leave the daily-use app on Home with the owner's intended data and a fresh backup.
 
 Record actual outcomes and any fixes after the session. iOS validation remains a later milestone after Android verification.

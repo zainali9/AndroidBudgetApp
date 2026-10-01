@@ -121,3 +121,15 @@ The phone is intentionally deferred because it is busy. No device access or inst
 - APK: `android/app/build/outputs/apk/release/app-release.apk`. It includes both milestones and can be installed once for combined testing.
 - No phone commands were run and no installation was attempted because the phone is busy. Device UI, keyboard, confirmation, and updated-app persistence checks remain pending. iOS remains untested.
 - The APK remains a personal sideload build using the preserved local development key. APKs, signing keys, and financial records are excluded from the commit.
+
+### OnePlus installation and smoke checks — 2026-10-01
+
+- Installed version 1.3.0 / code 4 over version 1.1.0 / code 2 using an in-place update. Installed/update certificate comparison passed before installation; the APK signature was verified again when resuming after an approval-review usage-limit interruption.
+- Exported a fresh backup before upgrading to `Documents/MyBudgetBackups`. Exported again after the checks. All six tables matched exactly: 3 accounts, 8 categories, 3 income sources, 1 debit card, 0 transactions, 0 budget allocations. Private copies are in ignored local build output and are not committed.
+- Two standalone cold launches succeeded with no ADB reverse forwarding to Metro. The final screen is Home.
+- Budget editor opened for October 2026 with 8 category fields. A temporary amount could be entered; Android Back showed discard confirmation; discarding kept the plan empty. Saving the already-empty plan also completed successfully through native SQLite.
+- Category editor opened with its parent selector and cancelled without saving.
+- Account editor showed opening input and balance preview. Changing the draft amount triggered the correction confirmation. Keep editing retained the draft; Cancel/Discard discarded it. The original data remained unchanged.
+- Debit-card and income-source editors opened and cancelled. Saving existing values unchanged for an account, debit card, and income source completed and returned to their screens.
+- One test expectation was corrected because the Settings heading was outside the scrolled viewport; this was a test-script assumption, not an app failure.
+- Checks used Android accessibility UI snapshots. They do not establish visual color/layout correctness. Nonempty plan copying, saved category regrouping, and financial mutation scenarios remain for an isolated-data device session; their repository behavior is covered by the 28 passing desktop tests. iOS remains untested.

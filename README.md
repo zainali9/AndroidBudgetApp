@@ -50,7 +50,7 @@ This first APK is a development build, which uses Metro on your computer to load
 5. Monthly budgets, copying past plans into drafts, category editing, and compact budget progress implemented; see Lesson 6.
 6. Manual backup/restore, migration tests, and personal standalone Android builds implemented; see Lesson 5.
 7. Setup-record corrections implemented in a separate milestone; see Lesson 7.
-8. Combined Android device verification for budgets, category edits, and setup corrections is pending; see the test checklist.
+8. Version 1.3.0 installed on OnePlus 8T; editor smoke checks and unchanged-value saves passed, and pre/post-update records matched exactly. Remaining isolated-data and visual scenarios are tracked in the combined test checklist.
 9. Test and adapt on iOS only after Android is complete.
 
 A Mac and Xcode are needed for local iOS native builds; optional cloud builds are an alternative. iOS compilation, signing, and device behavior remain unverified.
