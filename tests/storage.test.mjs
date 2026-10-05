@@ -2,7 +2,7 @@ import { filterTransactions, emptyTransactionFilters } from '../src/data/transac
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BudgetRepository, migrate, parsePkr, parseBackup } from '../src/data/storage.ts';
@@ -41,10 +41,10 @@ test('migration is repeatable and data survives close/reopen', t => {
 test('newer databases are refused without deleting records or version', t => {
   const { db, repo } = setup(t);
   const id = repo.createAccount('Cash', 'cash', 100);
-  db.execSync('PRAGMA user_version = 2');
+  db.execSync('PRAGMA user_version = 99');
   assert.throws(() => migrate(db), /newer app/);
   assert.equal(repo.balance(id), 100);
-  assert.equal(db.getFirstSync('PRAGMA user_version').user_version, 2);
+  assert.equal(db.getFirstSync('PRAGMA user_version').user_version, 99);
 });
 test('income, debit purchases, credit purchases and repayment reconcile', t => {
   const { repo } = setup(t);
@@ -128,7 +128,7 @@ test('saved entries reopen with labels, card links and deterministic monthly ord
     assert.equal(rows[2].note, "Owner's purchase");
     assert.equal(second.repo.accounts()[0].balance, 101750);
     assert.equal(second.repo.accounts()[1].balance, 2000);
-    assert.equal(second.repo.categories().length, 2);
+    assert.equal(second.repo.categories().length, 4);
     assert.equal(second.repo.debitCards()[0].account_id, bank);
     assert.equal(second.repo.incomeSources()[0].name, 'Freelance');
     assert.deepEqual(second.repo.transactions('2026-10'), []);
@@ -239,14 +239,14 @@ test('monthly plans distinguish zero from unset, reject invalid saves atomically
   const food = repo.createCategory('Food');
   const travel = repo.createCategory('Travel');
   const child = repo.createCategory('Groceries', food);
-  repo.saveBudget('2026-10', [{ categoryId: food, amount: 0 }, { categoryId: travel, amount: 120000 }]);
+  repo.saveBudget('2026-10', [{ categoryId: child, amount: 0 }, { categoryId: travel, amount: 120000 }]);
   const before = repo.budgetPlans('2026-10');
-  assert.deepEqual(before, [{ categoryId: food, amount: 0 }, { categoryId: travel, amount: 120000 }]);
+  assert.deepEqual(before, [{ categoryId: travel, amount: 120000 }, { categoryId: child, amount: 0 }]);
   for (const plans of [
-    [{ categoryId: child, amount: 1 }], [{ categoryId: 999, amount: 1 }],
-    [{ categoryId: food, amount: -1 }], [{ categoryId: food, amount: 0.5 }],
-    [{ categoryId: food, amount: 1 }, { categoryId: food, amount: 2 }],
-    [{ categoryId: food, amount: Number.MAX_SAFE_INTEGER }, { categoryId: travel, amount: 1 }],
+    [{ categoryId: food, amount: 1 }], [{ categoryId: 999, amount: 1 }],
+    [{ categoryId: child, amount: -1 }], [{ categoryId: child, amount: 0.5 }],
+    [{ categoryId: child, amount: 1 }, { categoryId: child, amount: 2 }],
+    [{ categoryId: child, amount: Number.MAX_SAFE_INTEGER }, { categoryId: travel, amount: 1 }],
   ]) { assert.throws(() => repo.saveBudget('2026-10', plans)); assert.deepEqual(repo.budgetPlans('2026-10'), before); }
   for (const month of ['1899-12', '2026-00', '2026-13', '10000-01']) assert.throws(() => repo.saveBudget(month, []));
   const backup = repo.exportBackup();
@@ -262,7 +262,7 @@ test('copy replaces allocations only and expenses follow their date without muta
   const food = repo.createCategory('Food');
   const travel = repo.createCategory('Travel');
   const child = repo.createCategory('Groceries', food);
-  repo.saveBudget('2026-09', [{ categoryId: food, amount: 10000 }]);
+  repo.saveBudget('2026-09', [{ categoryId: child, amount: 10000 }]);
   repo.saveBudget('2026-10', [{ categoryId: travel, amount: 5000 }]);
   const entry = { kind: 'expense', amount: 12000, date: '2026-09-30', accountId: bank, categoryId: child };
   const id = repo.record(entry);
@@ -270,14 +270,14 @@ test('copy replaces allocations only and expenses follow their date without muta
   repo.copyBudget('2026-09', '2026-10');
   assert.equal(repo.balance(bank), balance);
   assert.equal(repo.transactions('2026-10').length, 0);
-  assert.deepEqual(repo.budgetPlans('2026-10'), [{ categoryId: food, amount: 10000 }]);
+  assert.deepEqual(repo.budgetPlans('2026-10'), [{ categoryId: child, amount: 10000 }]);
   assert.equal(repo.spending('2026-09')[0].spent, 12000);
   repo.record({ ...entry, date: '2026-10-01' }, id);
   assert.deepEqual(repo.spending('2026-09'), []);
   assert.equal(repo.spending('2026-10')[0].spent, 12000);
   assert.equal(repo.budgetPlans('2026-10')[0].amount - repo.spending('2026-10')[0].spent, -2000);
   for (const source of ['2026-10', '2026-11', '2026-08']) assert.throws(() => repo.copyBudget(source, '2026-10'));
-  assert.deepEqual(repo.budgetPlans('2026-10'), [{ categoryId: food, amount: 10000 }]);
+  assert.deepEqual(repo.budgetPlans('2026-10'), [{ categoryId: child, amount: 10000 }]);
   repo.deleteEntry(id);
   assert.deepEqual(repo.spending('2026-10'), []);
   assert.equal(repo.budgetPlans('2026-10')[0].amount, 10000);
@@ -290,7 +290,7 @@ test('renaming and moving categories preserve IDs, transactions, balances, and a
   const home = repo.createCategory('Home');
   const child = repo.createCategory('Groceries', food);
   const id = repo.record({ kind: 'expense', amount: 1000, date, accountId: bank, categoryId: child });
-  repo.saveBudget('2026-09', [{ categoryId: food, amount: 3000 }]);
+  repo.db.runSync('INSERT INTO budget_plans VALUES (?, ?, ?)', '2026-09', food, 3000);
   const entry = repo.entry(id);
   repo.updateCategory(food, 'Meals', null);
   assert.equal(repo.transactions('2026-09')[0].category, 'Meals / Groceries');
@@ -509,4 +509,90 @@ test('filters preserve order and records and follow renamed or regrouped categor
   assert.deepEqual(filterTransactions(updated, { ...emptyTransactionFilters, accountId: f.bank, categoryId: f.travel }).map(row => row.id), [f.child]);
   assert.deepEqual(filterTransactions(updated, { ...emptyTransactionFilters, query: 'milk renamed' }).map(row => row.id), [f.child]);
   assert.deepEqual(filterTransactions(updated, { ...emptyTransactionFilters, categoryId: f.food }).map(row => row.id), [f.direct]);
+});
+
+
+test('version 1 upgrade preserves ledger and legacy plans, reuses defaults, and labels repayments once', t => {
+  const { db, repo, sqlite } = open(); t.after(() => sqlite.close());
+  db.execSync('PRAGMA foreign_keys = ON');
+  db.execSync(readFileSync(new URL('./fixtures/schema-v1.sql', import.meta.url), 'utf8'));
+  const bank = repo.createAccount('Bank', 'bank', 100000);
+  const credit = repo.createAccount('Credit', 'credit', -50000);
+  const bills = repo.createCategory('Bills');
+  const payment = repo.createCategory('Credit Card Payment', bills);
+  db.runSync('INSERT INTO budget_plans VALUES (?, ?, ?)', '2026-10', bills, 30000);
+  db.runSync("INSERT INTO transactions(kind, amount, date, account_id, destination_id) VALUES ('transfer', ?, ?, ?, ?)", 10000, '2026-10-01', bank, credit);
+  const balances = repo.accounts();
+  const before = JSON.parse(repo.exportBackup()).tables;
+  migrate(db); migrate(db);
+  assert.equal(db.getFirstSync('PRAGMA user_version').user_version, 2);
+  assert.deepEqual(repo.accounts(), balances);
+  assert.deepEqual(repo.categories(), before.categories);
+  assert.deepEqual(repo.budgetPlans('2026-10'), [{ categoryId: bills, amount: 30000 }]);
+  assert.deepEqual(repo.budgetTotals('2026-10'), [{ categoryId: bills, amount: 30000 }]);
+  assert.equal(repo.transactions('2026-10')[0].categoryId, payment);
+  assert.equal(repo.transactions('2026-10')[0].category, 'Bills / Credit Card Payment');
+  assert.deepEqual(repo.spending('2026-10'), []);
+  assert.deepEqual(db.getAllSync('PRAGMA foreign_key_check'), []);
+  const upgraded = JSON.parse(repo.exportBackup()).tables;
+  const expected = structuredClone(before); expected.transactions[0].category_id = payment;
+  assert.deepEqual(upgraded, expected);
+});
+
+test('leaf allocations roll up exactly, copy and restore, with no stored parent duplication', t => {
+  const { repo } = setup(t);
+  const food = repo.createCategory('Food');
+  const groceries = repo.createCategory('Groceries', food);
+  const dining = repo.createCategory('Dining', food);
+  const travel = repo.createCategory('Travel');
+  repo.saveBudget('2026-09', [{ categoryId: groceries, amount: 120001 }, { categoryId: dining, amount: 29999 }, { categoryId: travel, amount: 0 }]);
+  assert.deepEqual(repo.budgetTotals('2026-09'), [{ categoryId: food, amount: 150000 }, { categoryId: travel, amount: 0 }]);
+  assert.ok(!repo.budgetPlans('2026-09').some(row => row.categoryId === food));
+  const backup = repo.exportBackup(); repo.restoreBackup(backup);
+  repo.copyBudget('2026-09', '2026-10');
+  assert.deepEqual(repo.budgetTotals('2026-10'), repo.budgetTotals('2026-09'));
+  const before = JSON.parse(repo.exportBackup()).tables;
+  assert.throws(() => repo.saveBudget('2026-10', [{ categoryId: food, amount: 10 }, { categoryId: dining, amount: 10 }]));
+  assert.deepEqual(JSON.parse(repo.exportBackup()).tables, before);
+});
+
+test('repayments are categorized and searchable without double-counting; editing destination removes the label', t => {
+  const { repo } = setup(t);
+  const bills = repo.categories().find(c => c.name === 'Bills');
+  const payment = repo.categories().find(c => c.name === 'Credit Card Payment');
+  assert.equal(payment.parent_id, bills.id);
+  const bank = repo.createAccount('Bank', 'bank', 10000);
+  const credit = repo.createAccount('Credit', 'credit', -10000);
+  const cash = repo.createAccount('Cash', 'cash', 0);
+  const entry = { kind: 'transfer', amount: 2000, accountId: bank, destinationId: credit, date: '2026-10-01' };
+  const id = repo.record(entry);
+  let rows = repo.transactions('2026-10');
+  assert.equal(rows[0].categoryId, payment.id);
+  assert.equal(filterTransactions(rows, { ...emptyTransactionFilters, categoryId: bills.id }).length, 1);
+  assert.equal(filterTransactions(rows, { ...emptyTransactionFilters, query: 'credit card payment' }).length, 1);
+  assert.deepEqual(repo.spending('2026-10'), []);
+  assert.equal(repo.balance(bank), 8000); assert.equal(repo.balance(credit), -8000);
+  const backup = repo.exportBackup(); assert.equal(JSON.parse(backup).version, 2);
+  repo.restoreBackup(backup); assert.equal(repo.transactions('2026-10')[0].categoryId, payment.id);
+  repo.record({ ...entry, destinationId: cash }, id);
+  assert.equal(repo.transactions('2026-10')[0].categoryId, null);
+  assert.equal(repo.balance(credit), -10000);
+  repo.deleteEntry(id); assert.equal(repo.balance(bank), 10000); assert.equal(repo.balance(cash), 0);
+});
+
+test('old backups retain parent plans for redistribution and upgraded backups keep child plans', t => {
+  const { repo } = setup(t);
+  const parent = repo.createCategory('Food');
+  const child = repo.createCategory('Groceries', parent);
+  const old = JSON.parse(repo.exportBackup()); old.version = 1;
+  old.tables.budget_plans = [{ month: '2026-10', category_id: parent, amount: 999 }];
+  repo.restoreBackup(JSON.stringify(old));
+  assert.deepEqual(repo.budgetTotals('2026-10'), [{ categoryId: parent, amount: 999 }]);
+  const before = repo.exportBackup();
+  assert.throws(() => repo.copyBudget('2026-10', '2026-11'));
+  assert.deepEqual(repo.budgetPlans('2026-11'), []);
+  repo.saveBudget('2026-10', [{ categoryId: child, amount: 999 }]);
+  assert.deepEqual(repo.budgetTotals('2026-10'), [{ categoryId: parent, amount: 999 }]);
+  repo.restoreBackup(before);
+  assert.deepEqual(repo.budgetPlans('2026-10'), [{ categoryId: parent, amount: 999 }]);
 });

@@ -42,7 +42,7 @@ function BudgetApp() {
       const snapshot: ScreenData = {
         accounts: repo.accounts(), categories, cards: repo.debitCards(), sources: repo.incomeSources(),
         transactions: repo.transactions(key),
-        plans: repo.budgetPlans(key).map(plan => ({ id: plan.categoryId, name: categories.find(c => c.id === plan.categoryId)!.name, planned: plan.amount, spent: spending.find(c => c.categoryId === plan.categoryId)?.spent ?? 0, color: palette[(plan.categoryId - 1) % palette.length] })),
+        plans: repo.budgetTotals(key).map(plan => ({ id: plan.categoryId, name: categories.find(c => c.id === plan.categoryId)!.name, planned: plan.amount, spent: spending.find(c => c.categoryId === plan.categoryId)?.spent ?? 0, color: palette[(plan.categoryId - 1) % palette.length] })),
         spending: spending.map(item => ({ id: item.categoryId, name: item.name, spent: item.spent, planned: 0, color: palette[(item.categoryId - 1) % palette.length] })),
       };
       return snapshot;

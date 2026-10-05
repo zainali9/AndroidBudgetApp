@@ -6,7 +6,7 @@ export interface Database {
   getAllSync<T>(sql: string, ...params: SqlValue[]): T[];
   getFirstSync<T>(sql: string, ...params: SqlValue[]): T | null;
 }
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 const MAX = Number.MAX_SAFE_INTEGER;
 export function money(value: number): number {
   if (!Number.isSafeInteger(value)) throw new Error('Amount must be safe integer paisa');
@@ -45,7 +45,7 @@ export function migrate(db: Database): void {
     const version = db.getFirstSync<{ user_version: number }>('PRAGMA user_version')!.user_version;
     if (version > SCHEMA_VERSION) throw new Error('This database needs a newer app version');
     if (version === SCHEMA_VERSION) return;
-    db.execSync(`
+    if (version === 0) db.execSync(`
       CREATE TABLE accounts (
         id INTEGER PRIMARY KEY, name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 100),
         kind TEXT NOT NULL CHECK(kind IN ('cash','bank','credit')),
@@ -83,7 +83,40 @@ export function migrate(db: Database): void {
       );
       PRAGMA user_version = 1;
     `);
+    // SQLite CHECK constraints require rebuilding this table; IDs and financial values stay intact.
+    db.execSync(`
+      CREATE TABLE transactions_v2 (
+        id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('income','expense','transfer')),
+        amount INTEGER NOT NULL CHECK(typeof(amount) = 'integer' AND amount BETWEEN 1 AND ${MAX}),
+        date TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
+        account_id INTEGER NOT NULL REFERENCES accounts(id),
+        destination_id INTEGER REFERENCES accounts(id),
+        category_id INTEGER REFERENCES categories(id), source_id INTEGER REFERENCES income_sources(id),
+        card_id INTEGER, FOREIGN KEY(card_id, account_id) REFERENCES cards(id, account_id),
+        CHECK(
+          (kind = 'income' AND source_id IS NOT NULL AND category_id IS NULL AND destination_id IS NULL AND card_id IS NULL) OR
+          (kind = 'expense' AND category_id IS NOT NULL AND source_id IS NULL AND destination_id IS NULL) OR
+          (kind = 'transfer' AND destination_id IS NOT NULL AND destination_id != account_id AND source_id IS NULL AND card_id IS NULL)
+        )
+      );
+      INSERT INTO transactions_v2 SELECT * FROM transactions;
+      DROP TABLE transactions;
+      ALTER TABLE transactions_v2 RENAME TO transactions;
+      CREATE INDEX transactions_date ON transactions(date);
+      CREATE INDEX transactions_account ON transactions(account_id);
+      CREATE INDEX transactions_destination ON transactions(destination_id);
+      PRAGMA user_version = 2;
+    `);
+    const repayment = ensureRepaymentCategory(db);
+    db.runSync("UPDATE transactions SET category_id = ? WHERE kind = 'transfer' AND destination_id IN (SELECT id FROM accounts WHERE kind = 'credit')", repayment);
   });
+}
+// Reuse the requested default names when they already exist; never rename user categories.
+function ensureRepaymentCategory(db: Database): number {
+  let parent = db.getFirstSync<{ id: number }>("SELECT id FROM categories WHERE parent_id IS NULL AND name = 'Bills' ORDER BY id LIMIT 1")?.id;
+  if (parent === undefined) parent = db.runSync("INSERT INTO categories(name, parent_id) VALUES ('Bills', NULL)").lastInsertRowId;
+  return db.getFirstSync<{ id: number }>("SELECT id FROM categories WHERE parent_id = ? AND name = 'Credit Card Payment' ORDER BY id LIMIT 1", parent)?.id
+    ?? db.runSync("INSERT INTO categories(name, parent_id) VALUES ('Credit Card Payment', ?)", parent).lastInsertRowId;
 }
 export type AccountKind = 'cash' | 'bank' | 'credit';
 export type Account = { id: number; name: string; kind: AccountKind; opening: number };
@@ -181,17 +214,29 @@ export class BudgetRepository {
     validBudgetMonth(month);
     return this.db.getAllSync<{ categoryId: number; amount: number }>('SELECT category_id AS categoryId, amount FROM budget_plans WHERE month = ? ORDER BY category_id', month);
   }
+  // Saved allocations stay at the leaves; display totals are derived, never stored twice.
+  budgetTotals(month: string): { categoryId: number; amount: number }[] {
+    const categories = this.categories();
+    const totals = new Map<number, number>();
+    for (const plan of this.budgetPlans(month)) {
+      const category = categories.find(c => c.id === plan.categoryId)!;
+      const root = category.parent_id ?? category.id;
+      totals.set(root, addMoney(totals.get(root) ?? 0, plan.amount));
+    }
+    return [...totals].map(([categoryId, amount]) => ({ categoryId, amount }));
+  }
   budgetMonths(): string[] {
     return this.db.getAllSync<{ month: string }>('SELECT DISTINCT month FROM budget_plans ORDER BY month DESC').map(row => row.month);
   }
   saveBudget(month: string, plans: { categoryId: number; amount: number }[]): void {
     validBudgetMonth(month);
     atomic(this.db, () => {
-      const roots = new Set(this.categories().filter(c => c.parent_id === null).map(c => c.id));
+      const categories = this.categories();
+      const leaves = new Set(categories.filter(c => !categories.some(child => child.parent_id === c.id)).map(c => c.id));
       const seen = new Set<number>();
       let total = 0;
       for (const plan of plans) {
-        if (!roots.has(plan.categoryId) || seen.has(plan.categoryId)) throw new Error('Choose each top-level category only once');
+        if (!leaves.has(plan.categoryId) || seen.has(plan.categoryId)) throw new Error('Assign each category without subcategories only once');
         seen.add(plan.categoryId);
         if (money(plan.amount) < 0) throw new Error('Budget amounts cannot be negative');
         total = addMoney(total, plan.amount);
@@ -236,7 +281,7 @@ export class BudgetRepository {
       if (id !== undefined) this.entry(id);
       const parameters = [entry.kind, entry.amount, entry.date, entry.note ?? '', entry.accountId,
         entry.kind === 'transfer' ? entry.destinationId : null,
-        entry.kind === 'expense' ? entry.categoryId : null,
+        entry.kind === 'expense' ? entry.categoryId : entry.kind === 'transfer' && this.account(entry.destinationId).kind === 'credit' ? ensureRepaymentCategory(this.db) : null,
         entry.kind === 'income' ? entry.sourceId : null,
         entry.kind === 'expense' ? entry.cardId ?? null : null];
       const result = id === undefined
@@ -268,7 +313,7 @@ export class BudgetRepository {
     for (const row of this.db.getAllSync<{ id: number }>('SELECT id FROM accounts')) this.balance(row.id);
   }
   exportBackup(): string {
-    return atomic(this.db, () => JSON.stringify({ format: 'my-budget', version: 1, currency: 'PKR', createdAt: new Date().toISOString(),
+    return atomic(this.db, () => JSON.stringify({ format: 'my-budget', version: 2, currency: 'PKR', createdAt: new Date().toISOString(),
       tables: Object.fromEntries(Object.keys(backupColumns).map(table => [table, this.db.getAllSync(`SELECT * FROM ${table}`)])) }, null, 2));
   }
   restoreBackup(text: string): void {
@@ -287,7 +332,10 @@ export class BudgetRepository {
       for (const card of this.debitCards()) if (this.account(card.account_id).kind !== 'bank') throw new Error('Backup contains an invalid debit card');
       const categories = this.categories();
       for (const category of categories) if (category.parent_id !== null && categories.find(p => p.id === category.parent_id)?.parent_id !== null) throw new Error('Backup contains nested subcategories');
-      for (const plan of backup.tables.budget_plans) if (categories.find(c => c.id === plan.category_id)?.parent_id !== null) throw new Error('Budget plans must use top-level categories');
+      // Version 1 plans may still be parent-only. Preserve them for explicit redistribution.
+      for (const row of this.db.getAllSync<{ category_id: number | null; destination_id: number }>("SELECT category_id, destination_id FROM transactions WHERE kind = 'transfer'")) {
+        if (row.category_id !== null && this.account(row.destination_id).kind !== 'credit') throw new Error('Only credit repayments can have a transfer category');
+      }
       this.validateBalances();
       for (const month of this.budgetMonths()) this.budgetPlans(month).reduce((total, row) => addMoney(total, row.amount), 0);
       for (const { month } of this.db.getAllSync<{ month: string }>("SELECT DISTINCT substr(date,1,7) AS month FROM transactions")) this.spending(month).reduce((total, row) => addMoney(total, row.spent), 0);
@@ -328,7 +376,7 @@ export function parseBackup(text: string): Backup {
     if (bytes > BACKUP_LIMIT) throw new Error('Backup is larger than the 10 MB limit');
   }
   const data = JSON.parse(text);
-  if (!data || data.format !== 'my-budget' || data.version !== 1 || data.currency !== 'PKR' || !data.tables) throw new Error('Unsupported backup format, version or currency');
+  if (!data || data.format !== 'my-budget' || ![1, 2].includes(data.version) || data.currency !== 'PKR' || !data.tables) throw new Error('Unsupported backup format, version or currency');
   const tables: Backup['tables'] = {};
   let count = 0;
   for (const [table, columns] of Object.entries(backupColumns)) {

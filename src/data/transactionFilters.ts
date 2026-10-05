@@ -15,7 +15,7 @@ export function filterTransactions(rows: SavedTransaction[], filters: Transactio
   return rows.filter(row => {
     if (filters.kind !== 'all' && row.kind !== filters.kind) return false;
     if (filters.accountId !== null && row.accountId !== filters.accountId && row.destinationId !== filters.accountId) return false;
-    if (filters.categoryId !== null && (row.kind !== 'expense' || (row.categoryId !== filters.categoryId && row.categoryParentId !== filters.categoryId))) return false;
+    if (filters.categoryId !== null && (row.categoryId !== filters.categoryId && row.categoryParentId !== filters.categoryId)) return false;
     const text = normalize([row.note, row.account, row.destination, row.category, row.source, row.card, row.date].filter(Boolean).join(' '));
     return words.every(word => text.includes(word));
   });
