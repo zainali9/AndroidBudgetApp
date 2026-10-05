@@ -51,7 +51,7 @@ This first APK is a development build, which uses Metro on your computer to load
 6. Manual backup/restore, migration tests, and personal standalone Android builds implemented; see Lesson 5.
 7. Setup-record corrections implemented in a separate milestone; see Lesson 7.
 8. Version 1.3.0 installed on OnePlus 8T; editor smoke checks and unchanged-value saves passed, and pre/post-update records matched exactly. Remaining isolated-data and visual scenarios are tracked in the combined test checklist.
-9. Transaction search and filters implemented as a separate milestone; see Lesson 9.
+9. Transaction search and filters implemented and installed as version 1.4.0. Native controls, populated date search, type/account filtering, and no-match/clear behavior passed; the current backup validated in temporary SQLite. See Lesson 9 for remaining cases.
 10. Finish the remaining Android device scenarios, then test and adapt on iOS.
 
 A Mac and Xcode are needed for local iOS native builds; optional cloud builds are an alternative. iOS compilation, signing, and device behavior remain unverified.

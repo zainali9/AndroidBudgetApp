@@ -85,12 +85,12 @@ Strict TypeScript checking passes. The fixtures use real SQLite and invented tes
 
 ## Phone checks
 
-- [ ] Install 1.4.0 in place, preserving the existing package, signing key, and data.
-- [ ] Type a search, show/hide filters, choose a transaction type/account/category, and clear all filters.
-- [ ] Check keyboard behavior and the empty-month state without creating dummy financial records.
+- [x] Install 1.4.0 in place, preserving the existing package, signing key, and data.
+- [x] Type a search, show/hide filters, choose a transaction type/account/category, and clear all filters.
+- [x] Check keyboard behavior and the empty-month state without creating dummy financial records.
 - [ ] With suitable real entries or an isolated test database, verify populated matches, no-match messages, transfer direction, parent/child matches, and editing a filtered entry.
-- [ ] Confirm the current month/filter combination is understandable when moving between months.
-- [ ] Compare pre/post-update exports and cold-launch without Metro.
+- [x] Confirm the current month/filter combination is understandable when moving between months.
+- [x] Validate the current export against the pre-update snapshot and cold-launch without Metro (see the October 5 follow-up and comparison interval below).
 
 Device/build outcomes are recorded below. iOS remains untested.
 
@@ -104,3 +104,22 @@ Device/build outcomes are recorded below. iOS remains untested.
 - Output: `android/app/build/outputs/apk/release/app-release.apk`.
 - The phone remained connected but locked. Version 1.4.0 was not installed; no phone records were changed. Search/filter UI and keyboard checks remain pending on-device. The previously installed version is 1.3.0.
 - Existing populated-budget/category-change device scenarios also remain on the combined checklist; this milestone does not mark those tests complete. iOS remains untested.
+
+### Installation and filter checks — 2026-10-01
+
+- Version 1.4.0 / code 5 installed successfully over 1.3.0 using an in-place update. The installed and update APK certificates matched. A fresh pre-update backup was exported before installation.
+- A standalone cold start succeeded with no Metro reverse forwarding. Home and Transactions opened successfully.
+- Search typing, opening filters while the keyboard was visible, selecting expense/account/category filters together, and collapsing the panel passed. The three active filters persisted when moving from October to November. Clear filters reset selections and emptied the search input.
+- Changing the type to Income cleared the category filter and hid category controls. Leaving Transactions and returning reset its temporary filters.
+- The data had no transactions, so these are native UI/empty-state checks. Populated search matches and filtering calculations remain covered by desktop SQLite tests, with populated device scenarios still pending. No sample financial records were created.
+- Automatic approval review hit a usage limit before the final post-update export command could run. Consequently the final backup comparison and final cold-start follow-up were not completed in that session.
+
+### Resumed verification — 2026-10-05
+
+- Confirmed the phone still runs version 1.4.0 / code 5. After unlocking, exported a fresh backup successfully to `Documents/MyBudgetBackups/my-budget-2026-10-05T04-48-24-879Z.json`. The phone database was not restored or overwritten.
+- Validated the export and restored it into a temporary, in-memory SQLite database on the PC. Re-exported table contents matched exactly, including IDs and relationships. This validates the actual backup using the repository restore path; it is not a device restore test.
+- Current records: 3 accounts, 21 categories, 3 income sources, 1 debit card, 1 transaction, and 10 budget allocations. Compared with the October 1 pre-update snapshot, 13 categories, 1 transaction, and 10 allocations were added; no original rows were modified or missing. The comparison spans several days rather than immediately surrounding installation, and new records were retained.
+- Standalone cold start passed with no Metro reverse forwarding. Home loaded successfully.
+- Read-only checks with the real October transaction passed: matching type and account each showed 1 of 1 entries, a different type showed 0 of 1 and the no-match message, and clearing restored the full list. Searching the saved date matched the entry; an invented unmatched query showed no match; clearing restored it.
+- No sample transactions were added and no financial records were edited. Filters were cleared and the app was left on Home.
+- Remaining device cases include populated transfer-direction and parent/child category filtering, editing a filtered entry, and the earlier populated-budget/category-regrouping scenarios. Desktop coverage remains 32 passing tests; iOS remains untested.
