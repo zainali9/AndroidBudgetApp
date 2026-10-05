@@ -22,11 +22,13 @@ export function BudgetProgress({ plans, spending }: { plans: Budget[]; spending:
         const over = row.spent > row.planned;
         return <View key={row.id} style={{ padding: 12, gap: 5, borderRadius: 12, backgroundColor: theme.surface }}>
           <Label style={{ fontWeight: '600' }}>{row.name}</Label>
-          <Label>{pkr(row.spent)} / {pkr(row.planned)}</Label>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+            <Label style={{ flex: 1 }}>{pkr(row.spent)} / {pkr(row.planned)}</Label>
+            <Label style={{ flex: 1, textAlign: 'right', color: over ? theme.expense : theme.muted }}>{over ? 'Over budget' : 'Remaining'} · {pkr(Math.abs(row.planned - row.spent))}</Label>
+          </View>
           <View accessible accessibilityRole="progressbar" accessibilityLabel={`${row.name}: spent ${pkr(row.spent)} of ${pkr(row.planned)}`} accessibilityValue={{ min: 0, max: 100, now: Math.round(ratio * 100) }} style={{ height: 7, borderRadius: 4, backgroundColor: theme.tint, overflow: 'hidden' }}>
             <View style={{ height: '100%', width: `${ratio * 100}%`, backgroundColor: over ? theme.expense : theme.primary }} />
           </View>
-          <Label style={{ color: over ? theme.expense : theme.muted }}>{over ? 'Over budget' : 'Remaining'} · {pkr(Math.abs(row.planned - row.spent))}</Label>
         </View>;
       })}
     </> : <EmptyState title="No budget set for this month" detail="Edit the monthly plan to assign limits. Expenses are still tracked without a plan." />}

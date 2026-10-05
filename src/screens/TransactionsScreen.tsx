@@ -28,24 +28,24 @@ export function TransactionsScreen({ rows, accounts, categories, onAdd, onEdit, 
   ]);
   return <>
     <Heading>Money in & out</Heading>
-    <View style={{ gap: 8 }}><Action onPress={() => onAdd('income')}>Add income</Action><Action onPress={() => onAdd('transfer')}>Transfer / repay card</Action></View>
+    <View style={{ gap: 8 }}><Action onPress={() => onAdd('income')}>Add income</Action><Action onPress={() => onAdd('transfer')}>Transfer / repay card</Action><Action onPress={() => onAdd('expense')}>Expenses</Action></View>
     <Field label="Search notes, names or dates" value={filters.query} onChange={query => setFilters(previous => ({ ...previous, query }))} maxLength={200} />
     <Action onPress={() => setExpanded(value => !value)}>{expanded ? 'Hide filters' : 'Show filters'}{active ? ` (${active} active)` : ''}</Action>
     {expanded && <View style={{ gap: 14 }}>
       <Choice label="Transaction type" value={filters.kind} options={[
         { value: 'all', label: 'All types' }, { value: 'expense', label: 'Expenses' }, { value: 'income', label: 'Income' }, { value: 'transfer', label: 'Transfers / repayments' },
-      ]} onChange={value => setFilters(previous => ({ ...previous, kind: value as TransactionFilters['kind'], categoryId: value === 'income' || value === 'transfer' ? null : previous.categoryId }))} />
+      ]} onChange={value => setFilters(previous => ({ ...previous, kind: value as TransactionFilters['kind'], categoryId: value === 'income' ? null : previous.categoryId }))} />
       <Choice label="Account filter" value={String(filters.accountId ?? '')} options={[{ value: '', label: 'All accounts' }, ...accounts.map(account => ({ value: String(account.id), label: account.name }))]} onChange={value => setFilters(previous => ({ ...previous, accountId: value ? Number(value) : null }))} />
       <Label muted>Includes transfers into and out of the selected account.</Label>
-      {(filters.kind === 'all' || filters.kind === 'expense') && <>
-        <Choice label="Expense category filter" value={String(filters.categoryId ?? '')} options={[{ value: '', label: 'All categories' }, ...categories.map(category => ({ value: String(category.id), label: category.parent_id === null ? category.name : `${categories.find(parent => parent.id === category.parent_id)?.name} / ${category.name}` }))]} onChange={value => setFilters(previous => ({ ...previous, categoryId: value ? Number(value) : null }))} />
-        <Label muted>Choosing a category shows expenses only. A parent includes its subcategories.</Label>
+      {filters.kind !== 'income' && <>
+        <Choice label="Category filter" value={String(filters.categoryId ?? '')} options={[{ value: '', label: 'All categories' }, ...categories.map(category => ({ value: String(category.id), label: category.parent_id === null ? category.name : `${categories.find(parent => parent.id === category.parent_id)?.name} / ${category.name}` }))]} onChange={value => setFilters(previous => ({ ...previous, categoryId: value ? Number(value) : null }))} />
+        <Label muted>A parent includes its subcategories. Credit card payments appear as transfers and do not add to spending.</Label>
       </>}
     </View>}
     {filtered && <Action onPress={() => setFilters({ ...emptyTransactionFilters })}>Clear filters</Action>}
     <Label muted>Showing {shown.length} of {rows.length} transactions in the selected month. Filters do not change balances or budgets.</Label>
     {shown.length ? shown.map(item => <Card key={item.id}>
-      <Label style={{ fontWeight: '600', fontSize: 17 }}>{item.kind === 'expense' ? item.category : item.kind === 'income' ? item.source : 'Transfer'}</Label>
+      <Label style={{ fontWeight: '600', fontSize: 17 }}>{item.kind === 'expense' ? item.category : item.kind === 'income' ? item.source : item.category ?? 'Transfer'}</Label>
       <Label muted>{item.date} · {item.account}{item.destination ? ` → ${item.destination}` : ''}{item.card ? ` · ${item.card}` : ''}</Label>
       {!!item.note && <Label>{item.note}</Label>}
       <Label style={{ fontWeight: '600', fontSize: 17, color: item.kind === 'income' ? theme.income : item.kind === 'expense' ? theme.expense : theme.text }}>{item.kind === 'income' ? '+' : item.kind === 'expense' ? '−' : '↔'} {pkr(item.amount)}</Label>

@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import { Budget, pkr, spendingTotal } from '../sampleData';
 import { Account, Category, DebitCard, IncomeSource, SavedTransaction } from '../data/storage';
 import { useTheme } from '../theme';
-import { Card, EmptyState, Heading, InfoRow, Label, Tab } from '../components/Common';
+import { Card, EditableRow, EmptyState, Heading, InfoRow, Label, Tab } from '../components/Common';
 import { Action } from '../components/FormControls';
 import { BudgetProgress } from '../components/BudgetProgress';
 import { BackupControls } from '../components/BackupControls';
@@ -41,9 +41,9 @@ export function BudgetScreens({ tab, data, onAdd, onEdit, onChanged, onPlan, onE
   return <><Heading>Make it yours</Heading>
     <InfoRow title="Currency" detail="PKR · Pakistani rupee" />
     <Heading>Expense categories</Heading><Action onPress={() => onAdd('category')}>Add category</Action>
-    {data.categories.length ? data.categories.map(category => <View key={category.id}><InfoRow title={category.name} detail={category.parent_id ? `Under ${data.categories.find(p => p.id === category.parent_id)?.name}` : 'Top-level category'} /><Action onPress={() => onEditCategory(category)}>Edit {category.name}</Action></View>) : <Label muted>No categories yet. Add one before recording expenses.</Label>}
+    {data.categories.length ? data.categories.map(category => <EditableRow key={category.id} title={category.name} detail={category.parent_id ? `Under ${data.categories.find(p => p.id === category.parent_id)?.name}` : 'Top-level category'} onEdit={() => onEditCategory(category)} />) : <Label muted>No categories yet. Add one before recording expenses.</Label>}
     <Heading>Income sources</Heading><Action onPress={() => onAdd('source')}>Add income source</Action>
-    {data.sources.map(source => <View key={source.id}><InfoRow title={source.name} detail="Income source" /><Action onPress={() => onEditSetup({ kind: 'source', record: source })}>Edit {source.name}</Action></View>)}
+    {data.sources.map(source => <EditableRow key={source.id} title={source.name} detail="Income source" onEdit={() => onEditSetup({ kind: 'source', record: source })} />)}
     <BackupControls onChanged={onChanged} />
     <InfoRow title="Appearance" detail="Follows your phone's light or dark theme" />
   </>;

@@ -5,6 +5,7 @@ import { useRepository } from '../data/DatabaseProvider';
 import { AccountKind, Entry, localDate, parsePkr } from '../data/storage';
 import { Heading, Label } from '../components/Common';
 import { Action, Choice, Field } from '../components/FormControls';
+import { DateField } from '../components/DateField';
 import { useTheme } from '../theme';
 
 export type FormKind = 'account' | 'card' | 'category' | 'source' | 'expense' | 'income' | 'transfer';
@@ -91,10 +92,10 @@ export function EntryForm({ kind, onClose, onSaved, initial, entryId }: { kind: 
             {!!cards.length && <Choice label="Debit card (optional)" value={card} options={[{ value: '', label: 'Account directly' }, ...options(cards)]} onChange={setCard} />}
           </>}
           {kind === 'income' && <><Choice label="Income source" value={source} options={options(sources)} onChange={setSource} />{!sources.length && <Label muted>Add an income source from Settings first.</Label>}</>}
-          {kind === 'transfer' && <><Choice label="To account" value={destination} options={options(accounts.filter(a => String(a.id) !== account))} onChange={setDestination} /><Label muted>For a credit-card repayment, transfer from your bank to the credit card. Transfers do not count as spending or income.</Label></>}
+          {kind === 'transfer' && <><Choice label="To account" value={destination} options={options(accounts.filter(a => String(a.id) !== account))} onChange={setDestination} /><Label muted>For a credit-card repayment, transfer from your bank to the credit card. Transfers do not count as spending or income.</Label>{accounts.find(a => String(a.id) === destination)?.kind === 'credit' && <Label>Category: Bills / Credit Card Payment · recorded as a transfer</Label>}</>}
           {transaction && <>
             <Field label="Amount (PKR)" value={amount} onChange={setAmount} numeric maxLength={20} />
-            <Field label="Date (YYYY-MM-DD)" value={date} onChange={setDate} maxLength={10} />
+            <DateField value={date} onChange={setDate} />
             <Field label="Note (optional)" value={note} onChange={setNote} multiline maxLength={500} />
           </>}
           {!!error && <View accessibilityLiveRegion="polite"><Label style={{ color: theme.expense }}>{error}</Label></View>}

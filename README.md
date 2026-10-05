@@ -52,7 +52,8 @@ This first APK is a development build, which uses Metro on your computer to load
 7. Setup-record corrections implemented in a separate milestone; see Lesson 7.
 8. Version 1.3.0 installed on OnePlus 8T; editor smoke checks and unchanged-value saves passed, and pre/post-update records matched exactly. Remaining isolated-data and visual scenarios are tracked in the combined test checklist.
 9. Transaction search and filters implemented and installed as version 1.4.0. Native controls, populated date search, type/account filtering, and no-match/clear behavior passed; the current backup validated in temporary SQLite. See Lesson 9 for remaining cases.
-10. Finish the remaining Android device scenarios, then test and adapt on iOS.
+10. Version 1.5.0 implements subcategory allocations, categorized credit repayments, compact edit controls, an expense shortcut, inline remaining amounts and a native date picker. See Lessons 10–11 for compatibility and verification.
+11. Finish the remaining Android device scenarios, then test and adapt on iOS.
 
 A Mac and Xcode are needed for local iOS native builds; optional cloud builds are an alternative. iOS compilation, signing, and device behavior remain unverified.
 
@@ -85,3 +86,5 @@ Read [Lesson 6: monthly budgets and category editing](docs/06-monthly-budgets-an
 Read [Lesson 7: setup-record corrections](docs/07-setup-record-corrections.md) for account balance previews, safe updates, and reusable form components. Use the [combined Android test checklist](docs/08-combined-android-test-checklist.md) to verify both new milestones in one phone session.
 
 Read [Lesson 9: transaction search and filters](docs/09-transaction-search-and-filters.md) for searching, combining filters, pure functions, and stable record IDs.
+
+Read [Lesson 10: subcategory budgets and repayments](docs/10-subcategory-budgets-and-repayments.md) and [Lesson 11: compact controls and calendar](docs/11-compact-controls-and-calendar.md) for version 1.5.0.

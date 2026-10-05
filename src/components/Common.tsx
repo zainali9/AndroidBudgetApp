@@ -12,6 +12,7 @@ export const icons = {
   Settings: 'M4 5H20V7H4ZM4 11H20V13H4ZM4 17H20V19H4ZM8 3H10V9H8ZM14 9H16V15H14ZM7 15H9V21H7Z',
   previous: 'M15.4 5.4L14 4L6 12L14 20L15.4 18.6L8.8 12Z',
   next: 'M8.6 5.4L10 4L18 12L10 20L8.6 18.6L15.2 12Z',
+  edit: 'M3 17.25V21H6.75L17.81 9.94L14.06 6.19ZM20.71 7.04A1 1 0 0 0 20.71 5.63L18.37 3.29A1 1 0 0 0 16.96 3.29L15.13 5.12L18.88 8.87Z',
   add: 'M11 5H13V11H19V13H13V19H11V13H5V11H11Z',
 };
 export type Tab = 'Home' | 'Transactions' | 'Budgets' | 'Accounts' | 'Settings';
@@ -53,3 +54,11 @@ export const styles = StyleSheet.create({
   month: { flexDirection: 'row', alignItems: 'center' },
   iconButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
 });
+
+export function EditableRow({ title, detail, onEdit }: { title: string; detail: string; onEdit: () => void }) {
+  const theme = useTheme();
+  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4, borderBottomWidth: 1, borderColor: theme.line }}>
+    <View style={{ flex: 1, paddingVertical: 4 }}><Label style={{ fontWeight: '600' }}>{title}</Label><Label muted>{detail}</Label></View>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${title}`} onPress={onEdit} style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.6 : 1 }]}><Icon name="edit" color={theme.primary} /></Pressable>
+  </View>;
+}
